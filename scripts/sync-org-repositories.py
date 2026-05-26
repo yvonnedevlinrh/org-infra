@@ -403,7 +403,13 @@ def get_latest_release(
             f"{GITHUB_API}/repos/{org}/{repo_name}"
             f"/git/tags/{obj['sha']}"
         )
-        _, tag_data = github_api_request(tag_url)
+        tag_status, tag_data = github_api_request(tag_url)
+        if tag_status != 200:
+            print(
+                f"Error: Could not dereference tag object "
+                f"for {org}/{repo_name}."
+            )
+            sys.exit(1)
         commit_sha = tag_data.get("object", {}).get("sha", "")
     else:
         # Lightweight tag — SHA points directly to the commit
@@ -981,7 +987,16 @@ def main() -> None:
                 f"/{SOURCE_REPO}"
                 f"/git/tags/{data['object']['sha']}"
             )
-            _, tag_data = github_api_request(tag_endpoint)
+            tag_status, tag_data = github_api_request(
+                tag_endpoint,
+            )
+            if tag_status != 200:
+                print(
+                    f"Error: Could not dereference "
+                    f"tag object for "
+                    f"{args.org}/{SOURCE_REPO}."
+                )
+                sys.exit(1)
             release_sha = tag_data.get(
                 "object", {},
             ).get("sha")
