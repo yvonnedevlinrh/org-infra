@@ -68,3 +68,10 @@ __pycache__/
 
 # MegaLinter reports (generated)
 megalinter-reports/
+
+# Internal research docs (contain GCP project IDs, ITPC contacts, SNOW links)
+docs/VERTEX_AI_CI_RESEARCH.md
+docs/VERTEX_AI_WIF_SETUP.md
+docs/REUSABLE_WORKFLOW_WIF_PATCH.md
+docs/opencode-transcript-vertex-ai-ci.md
+docs/org-infra.code-workspace

@@ -1,0 +1,223 @@
+# Test workflow for AI Council Review provider integration
+#
+# Purpose: Validates that GitHub Actions can authenticate to GCP
+# via the ITPC centralized WIF pool and optionally run Claude Code CLI.
+#
+#   Auth: ITPC WIF pool (itpc-identity-pool) in utility-project-468319
+#   Secrets: GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_PROJECT_ID
+#   Provider: projects/21066242673/.../itpc-identity-pool/providers/github-com
+#
+# This is a temporary test workflow. Once validated, the authentication
+# pattern will be integrated into reusable_council_review.yml.
+#
+# Test procedure:
+# 1. Register GitHub org with ITPC team
+# 2. Grant roles/aiplatform.user on target GCP project to principalSet
+# 3. Configure org secrets (see docs/VERTEX_AI_CI_RESEARCH.md)
+# 4. Push this file on a branch and open a PR
+# 5. Verify: WIF auth succeeds (gcloud auth list)
+# 6. Verify: Claude Code responds (requires Claude model access)
+# 7. Verify: fork PRs skip gracefully (no OIDC token available)
+# 8. Remove this workflow after validation
+
+name: Council Review Test
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: council-review-test-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  gate-checks:
+    name: Gate Checks
+    runs-on: ubuntu-latest
+    outputs:
+      should_review: ${{ steps.gate.outputs.should_review }}
+      skip_reason: ${{ steps.gate.outputs.skip_reason }}
+    steps:
+      - name: Check gate conditions
+        id: gate
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          HAS_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}
+        run: |
+          if [[ "${PR_AUTHOR}" == "dependabot[bot]" ]]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Dependabot PR" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${PR_DRAFT}" == "true" ]]; then
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Draft PR" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${HAS_WIF}" == "true" ]]; then
+            echo "should_review=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=No WIF credentials configured (fork PR or secrets not set)" >> "$GITHUB_OUTPUT"
+          fi
+
+  test-claude-code:
+    name: Test Claude Code (Vertex AI)
+    needs: gate-checks
+    if: needs.gate-checks.outputs.should_review == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      CLAUDE_CODE_USE_VERTEX: "1"
+      CLOUD_ML_REGION: "global"
+      ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+    steps:
+      - name: Authenticate to Google Cloud (ITPC WIF)
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Verify WIF authentication
+        id: wif-test
+        run: |
+          echo "--- WIF Authentication Check ---"
+          gcloud auth list
+          echo ""
+          echo "Project: $(gcloud config get-value project 2>/dev/null)"
+          echo "Account: $(gcloud config get-value account 2>/dev/null)"
+          echo "ADC file: ${GOOGLE_APPLICATION_CREDENTIALS:-${CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE:-not set}}"
+          echo "wif_ok=true" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify Vertex AI API access
+        id: api-test
+        run: |
+          set +e
+          gcloud ai models list --project="${{ secrets.GCP_PROJECT_ID }}" --region=us-east5 --format="value(name)" 2>api_stderr.txt
+          EXIT_CODE=$?
+          set -e
+          if [[ "${EXIT_CODE}" -eq 0 ]]; then
+            echo "api_ok=true" >> "$GITHUB_OUTPUT"
+            echo "Vertex AI API accessible"
+          else
+            echo "api_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Vertex AI API not accessible (may need roles/aiplatform.user binding)"
+            cat api_stderr.txt
+          fi
+
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "${HOME}/.claude/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Claude Code + Vertex AI connectivity
+        id: basic-test
+        run: |
+          echo "Provider: Vertex AI (WIF, region=global)"
+          echo "Project: ${ANTHROPIC_VERTEX_PROJECT_ID}"
+
+          set +e
+          RESPONSE=$(claude -p "Respond with exactly one line: VERTEX_AI_WIF_TEST_OK" --model sonnet 2>claude_stderr.txt)
+          EXIT_CODE=$?
+          set -e
+
+          STDERR=$(cat claude_stderr.txt || true)
+          echo "Exit code: ${EXIT_CODE}"
+          echo "Response: ${RESPONSE}"
+          if [[ -n "${STDERR}" ]]; then
+            echo "Stderr: ${STDERR}"
+          fi
+
+          if [[ "${EXIT_CODE}" -eq 0 ]] && echo "${RESPONSE}" | grep -q "VERTEX_AI_WIF_TEST_OK"; then
+            echo "test_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Claude Code connectivity test failed (exit=${EXIT_CODE})"
+            echo "test_ok=false" >> "$GITHUB_OUTPUT"
+            echo "error_detail<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${STDERR:-${RESPONSE}}" | head -10
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test council review prompt
+        id: council-test
+        if: steps.basic-test.outputs.test_ok == 'true'
+        run: |
+          set +e
+          RESPONSE=$(claude -p "$(cat <<'PROMPT'
+          You are a code reviewer. Review the following diff and respond
+          with a JSON object: {"verdict": "APPROVE" or "REQUEST_CHANGES",
+          "findings": [{"severity": "LOW|MEDIUM|HIGH", "description": "..."}]}
+
+          --- a/example.py
+          +++ b/example.py
+          @@ -1,3 +1,3 @@
+          -print("hello")
+          +print("hello world")
+
+          Review this diff.
+          PROMPT
+          )" --model sonnet 2>/dev/null)
+          EXIT_CODE=$?
+          set -e
+
+          echo "Council response: ${RESPONSE}"
+
+          if [[ "${EXIT_CODE}" -eq 0 ]] && [[ -n "${RESPONSE}" ]]; then
+            echo "council_ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Council prompt test failed (exit=${EXIT_CODE})"
+            echo "council_ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post test results
+        if: always()
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9  # v5.0.0
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            ## AI Provider Integration Test — ITPC WIF + Vertex AI
+
+            | Check | Status | Details |
+            |-------|--------|---------|
+            | WIF Authentication | ${{ steps.auth.outcome == 'success' && 'PASS' || 'FAIL' }} | ITPC pool via `google-github-actions/auth@v3` |
+            | GCP Identity | ${{ steps.wif-test.outputs.wif_ok == 'true' && 'PASS' || 'FAIL' }} | Project: `${{ secrets.GCP_PROJECT_ID }}` |
+            | Vertex AI API | ${{ steps.api-test.outputs.api_ok == 'true' && 'PASS' || 'FAIL' }} | `roles/aiplatform.user` binding check |
+            | Claude Code Install | ${{ steps.basic-test.outcome != 'skipped' && 'PASS' || 'FAIL' }} | Via `claude.ai/install.sh` |
+            | Basic Connectivity | ${{ steps.basic-test.outputs.test_ok == 'true' && 'PASS' || 'FAIL' }} | ${{ steps.basic-test.outputs.error_detail || 'Claude responded via Vertex AI' }} |
+            | Council Prompt | ${{ steps.council-test.outputs.council_ok == 'true' && 'PASS' || steps.basic-test.outputs.test_ok != 'true' && 'SKIPPED' || 'FAIL' }} | Code review JSON response |
+
+            **Provider**: ITPC centralized WIF pool + Vertex AI + Claude Code CLI
+            **Overall: ${{ steps.wif-test.outputs.wif_ok == 'true' && steps.basic-test.outputs.test_ok == 'true' && 'READY for integration' || steps.wif-test.outputs.wif_ok == 'true' && 'WIF OK — Claude models pending' || 'NEEDS ATTENTION' }}**
+
+            ---
+            *AI provider integration test. Remove this workflow after validation.*
+
+  post-skip:
+    name: Log Skip
+    needs: gate-checks
+    if: needs.gate-checks.outputs.should_review == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log skip reason
+        env:
+          SKIP_REASON: ${{ needs.gate-checks.outputs.skip_reason }}
+        run: |
+          echo "Council review test skipped: ${SKIP_REASON}"
