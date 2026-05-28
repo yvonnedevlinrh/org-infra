@@ -6,4 +6,6 @@ LABEL org.opencontainers.image.description="Test image for reusable_publish_ghcr
 # Minimal test payload
 RUN echo "org-infra test image" > /test-marker
 
+USER nobody
+
 CMD ["cat", "/test-marker"]
