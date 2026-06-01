@@ -1,0 +1,182 @@
+# CI Test: Reusable Trivy Image Scan
+# ====================================
+# Self-validation tests for reusable_trivy_image_scan.yml.
+# Builds a minimal temp image, then scans it with and without digest to verify:
+# - Positive: scan passes on a clean image, vuln attestation attached when digest provided
+# - Negative: no attestation produced when digest is omitted
+
+name: Test Trivy Image Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/reusable_trivy_image_scan.yml"
+      - ".github/workflows/ci_test_trivy_image_scan.yml"
+      - ".github/ci-tests/ghcr-publish/Containerfile"
+
+permissions:
+  contents: read
+
+jobs:
+  check-changes:
+    name: Check Changed Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      files_changed: ${{ steps.filter.outputs.any_changed }}
+    steps:
+      - uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.5
+        id: filter
+        with:
+          files: |
+            .github/workflows/reusable_trivy_image_scan.yml
+            .github/workflows/ci_test_trivy_image_scan.yml
+            .github/ci-tests/ghcr-publish/**
+
+  build-test-image:
+    name: Build Test Image
+    needs: check-changes
+    if: >-
+      needs.check-changes.outputs.files_changed == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    uses: ./.github/workflows/reusable_publish_ghcr.yml
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+      id-token: write
+      attestations: write
+    with:
+      component_name: org-infra-test-trivy
+      containerfile_path: .github/ci-tests/ghcr-publish/Containerfile
+      context_path: .github/ci-tests/ghcr-publish
+      image_name: complytime/org-infra-test-trivy
+      allow_unprotected_ref: true
+
+  test-scan-no-attestation:
+    name: Test Scan (No Attestation)
+    needs: build-test-image
+    uses: ./.github/workflows/reusable_trivy_image_scan.yml
+    permissions:
+      packages: write
+      security-events: write
+      id-token: write
+    with:
+      image_ref: ${{ needs.build-test-image.outputs.image_ref }}
+
+  test-scan-with-attestation:
+    name: Test Scan (With Attestation)
+    needs: [build-test-image, test-scan-no-attestation]
+    uses: ./.github/workflows/reusable_trivy_image_scan.yml
+    permissions:
+      packages: write
+      security-events: write
+      id-token: write
+    with:
+      image_ref: ${{ needs.build-test-image.outputs.image_ref }}
+      image_digest: ${{ needs.build-test-image.outputs.digest }}
+
+  verify-scan-results:
+    name: Verify Scan Results
+    needs: [build-test-image, test-scan-no-attestation, test-scan-with-attestation]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Verify scan passed (no attestation)
+        env:
+          SCAN_PASSED: ${{ needs.test-scan-no-attestation.outputs.scan_passed }}
+        run: |
+          echo "scan_passed: $SCAN_PASSED"
+          if [[ "$SCAN_PASSED" != "true" ]]; then
+            echo "::error::Expected scan_passed='true', got '$SCAN_PASSED'"
+            exit 1
+          fi
+          echo "::notice::Scan passed (no attestation mode)"
+
+      - name: Verify no attestation (no digest provided)
+        env:
+          ATTESTATION: ${{ needs.test-scan-no-attestation.outputs.attestation_attached }}
+        run: |
+          echo "attestation_attached: $ATTESTATION"
+          if [[ "$ATTESTATION" == "true" ]]; then
+            echo "::error::Attestation should NOT be attached when no digest provided"
+            exit 1
+          fi
+          echo "::notice::Confirmed: no attestation without digest"
+
+      - name: Verify scan passed (with attestation)
+        env:
+          SCAN_PASSED: ${{ needs.test-scan-with-attestation.outputs.scan_passed }}
+        run: |
+          echo "scan_passed: $SCAN_PASSED"
+          if [[ "$SCAN_PASSED" != "true" ]]; then
+            echo "::error::Expected scan_passed='true', got '$SCAN_PASSED'"
+            exit 1
+          fi
+          echo "::notice::Scan passed (with attestation mode)"
+
+      - name: Verify attestation attached (with digest)
+        env:
+          ATTESTATION: ${{ needs.test-scan-with-attestation.outputs.attestation_attached }}
+        run: |
+          echo "attestation_attached: $ATTESTATION"
+          if [[ "$ATTESTATION" != "true" ]]; then
+            echo "::error::Expected attestation_attached='true', got '$ATTESTATION'"
+            exit 1
+          fi
+          echo "::notice::Attestation attached"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Login to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify vuln attestation via cosign
+        env:
+          IMAGE: ${{ needs.build-test-image.outputs.image }}
+          DIGEST: ${{ needs.build-test-image.outputs.digest }}
+        run: |
+          echo "Checking vuln attestation for ${IMAGE}@${DIGEST}"
+
+          cosign verify-attestation \
+            --type vuln \
+            --certificate-identity-regexp="^https://github.com/complytime/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "${IMAGE}@${DIGEST}" || {
+              echo "::error::Vuln attestation not found"
+              exit 1
+            }
+
+          echo "::notice::Vuln attestation verified"
+
+      - name: Cleanup test image
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_REF_OUTPUT: ${{ needs.build-test-image.outputs.image_ref }}
+        run: |
+          IMAGE_REF="$IMAGE_REF_OUTPUT"
+          TAG="${IMAGE_REF##*:}"
+
+          echo "Deleting package version with tag: $TAG"
+
+          gh api "/orgs/complytime/packages/container/org-infra-test-trivy/versions" \
+            --jq ".[] | select(.metadata.container.tags[] | . == \"$TAG\") | .id" | \
+          while read -r VERSION_ID; do
+            echo "Deleting version ID: $VERSION_ID"
+            gh api --method DELETE \
+              "/orgs/complytime/packages/container/org-infra-test-trivy/versions/$VERSION_ID" \
+              || echo "Failed to delete version $VERSION_ID"
+          done
