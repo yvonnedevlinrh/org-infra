@@ -1,9 +1,9 @@
 {
-  "id": "BP-2.01",
+  "id": "minimum-approvals",
   "meta": {
     "description": "Validate minimum approval count and prevent self-approval via GitHub or GitLab API",
     "controls": [
-      { "framework": "repo-branch-protection", "class": "source-code", "id": "BP-2" },
+      { "framework": "repo-branch-protection", "class": "source-code", "id": "approval-requirements" },
       { "framework": "OSPS", "class": "OSPS-QA", "id": "07" }
     ]
   },

@@ -44,7 +44,7 @@ The workflow must:
 2. **Register the ampel provider**: Copy `bin/ampel-plugin` to `~/.complytime/providers/complyctl-provider-ampel`.
 3. **Serve the policy via mock-oci-registry**: Start `./bin/mock-oci-registry` in the background, wait for it to be ready, then proceed.
 4. **Accept caller-supplied workspace config**: Accept a `complytime_config_path` input (relative path within the caller repo) and copy it to `complytime.yaml` at the complyctl workspace root.
-5. **Copy granular policy files**: Copy `cmd/ampel-plugin/convert/testdata/policies/*` to `.complytime/ampel/granular-policies/` before running `generate`.
+5. **Copy granular policy files**: Copy `compliance/ampel/branch-protection/*` from the org-infra checkout to `.complytime/ampel/granular-policies/` before running `generate`.
 6. **Run the complyctl pipeline**: Execute `complyctl get`, `complyctl generate --policy-id ampel-bp`, and `complyctl scan --policy-id ampel-bp --format pretty`.
 7. **Pass GITHUB_TOKEN to snappy**: Expose the `source_token` secret as `GITHUB_TOKEN` in the scan step environment so snappy can call the GitHub API.
 8. **Publish the report**: Append `report-*.md` contents to `$GITHUB_STEP_SUMMARY`.

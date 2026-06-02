@@ -1,9 +1,9 @@
 {
-  "id": "BP-5.01",
+  "id": "require-code-owner-review",
   "meta": {
     "description": "Validate code owner review requirements are enabled when CODEOWNERS file exists via GitHub or GitLab API",
     "controls": [
-      { "framework": "repo-branch-protection", "class": "source-code", "id": "BP-5" }
+      { "framework": "repo-branch-protection", "class": "source-code", "id": "code-owner-enforcement" }
     ]
   },
   "tenets": [

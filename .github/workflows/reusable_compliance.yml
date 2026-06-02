@@ -50,6 +50,14 @@ jobs:
           path: _providers
           persist-credentials: false
 
+      - name: Checkout org-infra (policy source)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: complytime/org-infra
+          path: _org-infra
+          sparse-checkout: compliance/ampel
+          persist-credentials: false
+
       - name: Checkout calling repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -96,9 +104,12 @@ jobs:
         run: cp "_caller/${CONFIG_PATH}" complytime.yaml
 
       - name: Copy ampel policy files
+        # TEMPORARY: Manual staging until provider content is distributed
+        # via OCI (see: complyctl provider content fetch feature).
         run: |
           mkdir -p .complytime/ampel/granular-policies
-          cp _providers/cmd/ampel-provider/convert/testdata/policies/* .complytime/ampel/granular-policies/
+          cp _org-infra/compliance/ampel/branch-protection/* \
+             .complytime/ampel/granular-policies/
 
       - name: Fetch policy bundle from OCI registry
         run: ./bin/complyctl get
