@@ -187,7 +187,7 @@ jobs:
           fi
 
       - name: Post test results
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9  # v5.0.0
         with:
           issue-number: ${{ github.event.pull_request.number }}
