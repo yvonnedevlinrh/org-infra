@@ -134,7 +134,7 @@ jobs:
           echo "Project: ${ANTHROPIC_VERTEX_PROJECT_ID}"
 
           set +e
-          RESPONSE=$(claude -p "Respond with exactly one line: VERTEX_AI_WIF_TEST_OK" --model sonnet 2>claude_stderr.txt)
+          RESPONSE=$(claude -p "Respond with exactly one line: VERTEX_AI_WIF_TEST_OK" --model claude-sonnet-4-6 2>claude_stderr.txt)
           EXIT_CODE=$?
           set -e
 
@@ -173,7 +173,7 @@ jobs:
 
           Review this diff.
           PROMPT
-          )" --model sonnet 2>/dev/null)
+          )" --model claude-sonnet-4-6 2>/dev/null)
           EXIT_CODE=$?
           set -e
 
