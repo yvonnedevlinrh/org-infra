@@ -165,18 +165,18 @@ jobs:
           risk="high"
 
           # Primary: use update-type from commit metadata
-          if [[ -n "${{ env.UPDATE_TYPE }}" ]]; then
-            case "${{ env.UPDATE_TYPE }}" in
+          if [[ -n "$UPDATE_TYPE" ]]; then
+            case "$UPDATE_TYPE" in
               *semver-patch*) risk="low"; echo "Patch update (metadata)." ;;
               *semver-minor*) risk="medium"; echo "Minor update (metadata)." ;;
               *semver-major*) risk="high"; echo "Major update (metadata). Requires manual review." ;;
             esac
           # Fallback: compare semantic versions
-          elif [[ -n "${{ env.FROM_VERSION }}" && -n "${{ env.TO_VERSION }}" ]]; then
-            from_major=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f1)
-            from_minor=$(echo "${{ env.FROM_VERSION }}" | cut -d. -f2)
-            to_major=$(echo "${{ env.TO_VERSION }}" | cut -d. -f1)
-            to_minor=$(echo "${{ env.TO_VERSION }}" | cut -d. -f2)
+          elif [[ -n "$FROM_VERSION" && -n "$TO_VERSION" ]]; then
+            from_major=$(echo "$FROM_VERSION" | cut -d. -f1)
+            from_minor=$(echo "$FROM_VERSION" | cut -d. -f2)
+            to_major=$(echo "$TO_VERSION" | cut -d. -f1)
+            to_minor=$(echo "$TO_VERSION" | cut -d. -f2)
             if [[ "$from_major" -eq "$to_major" && "$from_minor" -eq "$to_minor" ]]; then
               risk="low"; echo "Patch update (semver)."
             elif [[ "$from_major" -eq "$to_major" && "$from_minor" -lt "$to_minor" ]]; then
@@ -223,10 +223,11 @@ jobs:
         id: check_release_age
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          ECOSYSTEM: "${{ steps.detect_ecosystem.outputs.ecosystem }}"
         run: |
-          dep="${{ env.DEP_NAME }}"
-          version="${{ env.DEP_VERSION }}"
-          eco="${{ steps.detect_ecosystem.outputs.ecosystem }}"
+          dep="$DEP_NAME"
+          version="$DEP_VERSION"
+          eco="$ECOSYSTEM"
           release_date=""
 
           # Skip if no dependency info available
@@ -287,10 +288,11 @@ jobs:
         id: check_popularity
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          ECOSYSTEM: "${{ steps.detect_ecosystem.outputs.ecosystem }}"
         run: |
-          dep="${{ env.DEP_NAME }}"
-          uses_query="${{ env.USES_QUERY }}"
-          eco="${{ steps.detect_ecosystem.outputs.ecosystem }}"
+          dep="$DEP_NAME"
+          uses_query="$USES_QUERY"
+          eco="$ECOSYSTEM"
 
           case "$eco" in
             python)
@@ -299,7 +301,7 @@ jobs:
               exit 0
               ;;
             go)
-              query="${dep} v${{ env.TO_VERSION }} filename:go.mod"
+              query="${dep} v${TO_VERSION} filename:go.mod"
               ;;
             github_actions)
               if [[ -n "${uses_query}" ]]; then
