@@ -34,6 +34,7 @@ jobs:
         with:
           repository: "${{ github.event.repository.full_name }}" # Checkout the caller repo
           fetch-depth: 0 # This may also capture vulnerabilities unrelated to the PR.
+          persist-credentials: false
 
       - name: Run Dependency Review
         id: dependency_review

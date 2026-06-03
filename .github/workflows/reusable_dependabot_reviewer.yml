@@ -51,6 +51,7 @@ jobs:
           repository: "${{ github.event.repository.full_name }}"
           ref: "${{ github.event.pull_request.head.sha }}"
           fetch-depth: 2
+          persist-credentials: false
 
       - name: Get Dependency Information
         id: get_dep_info
