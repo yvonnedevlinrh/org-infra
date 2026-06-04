@@ -239,16 +239,21 @@ jobs:
 
           case "$eco" in
             github_actions)
+              # Reusable workflow refs include the file path in the dep name
+              # (e.g., "org/repo/.github/workflows/reusable_foo.yml").
+              # Extract "org/repo" for GitHub API calls.
+              repo_slug="$(echo "$dep" | cut -d'/' -f1-2)"
+
               # Try GitHub Releases first (with and without v prefix)
-              release_date="$(gh api "repos/${dep}/releases/tags/v${version}" \
+              release_date="$(gh api "repos/${repo_slug}/releases/tags/v${version}" \
                 --jq '.published_at' 2>/dev/null)" || true
               if [[ -z "$release_date" || "$release_date" == "null" ]]; then
-                release_date="$(gh api "repos/${dep}/releases/tags/${version}" \
+                release_date="$(gh api "repos/${repo_slug}/releases/tags/${version}" \
                   --jq '.published_at' 2>/dev/null)" || true
               fi
               # Fall back to tag creation date
               if [[ -z "$release_date" || "$release_date" == "null" ]]; then
-                tag_url="$(gh api "repos/${dep}/git/ref/tags/v${version}" \
+                tag_url="$(gh api "repos/${repo_slug}/git/ref/tags/v${version}" \
                   --jq '.object.url' 2>/dev/null)" || true
                 if [[ -n "$tag_url" && "$tag_url" != "null" ]]; then
                   release_date="$(gh api "$tag_url" \
