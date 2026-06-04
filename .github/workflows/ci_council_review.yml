@@ -2,7 +2,7 @@
 name: Council Review
 
 on:
-  workflow_run:  # zizmor: ignore[dangerous-triggers] — by design for fork PR support (two-workflow chain pattern)
+  workflow_run:  # zizmor: ignore[dangerous-triggers] - by design for fork PR support (two-workflow chain pattern)
     workflows: ["Council Review - Collect"]
     types: [completed]
 

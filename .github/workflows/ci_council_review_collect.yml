@@ -26,13 +26,13 @@ jobs:
         run: |
           if [[ "${PR_DRAFT}" == "true" ]]; then
             echo "should_collect=false" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=Draft PR — skipping council review" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Draft PR - skipping council review" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           if [[ "${PR_AUTHOR}" == "dependabot[bot]" ]]; then
             echo "should_collect=false" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=Dependabot PR — skipping council review" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Dependabot PR - skipping council review" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
