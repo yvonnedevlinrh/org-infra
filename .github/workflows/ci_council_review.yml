@@ -14,7 +14,7 @@ on:
         type: number
 
 concurrency:
-  group: council-review-${{ github.event.workflow_run.id || github.run_id }}
+  group: council-review-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: true
 
 permissions: {}

@@ -148,7 +148,10 @@ jobs:
 
           Keep the review concise and actionable."
 
-          claude -p "${PROMPT}" --model "${MODEL}" > claude_raw.txt 2>&1 || true
+          if ! claude -p "${PROMPT}" --model "${MODEL}" > claude_raw.txt 2>claude_err.txt; then
+            echo "::warning::Claude invocation failed (exit $?)"
+            cat claude_err.txt >&2
+          fi
 
           MARKER="<!-- council-review-bot -->"
           {
@@ -172,5 +175,4 @@ jobs:
           issue-number: ${{ steps.meta.outputs.pr_number }}
           body-path: review_output.txt
           edit-mode: replace
-          comment-author: "github-actions[bot]"
-          body-includes: "<!-- council-review-bot -->"
+          reactions: "eyes"

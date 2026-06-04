@@ -58,9 +58,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           gh pr diff "${PR_NUMBER}" \
             --repo "${{ github.repository }}" > pr-diff.patch
