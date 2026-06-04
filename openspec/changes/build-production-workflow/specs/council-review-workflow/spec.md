@@ -1,3 +1,5 @@
+# Council Review Workflow Specification
+
 ## ADDED Requirements
 
 ### Requirement: Collect workflow gathers PR diff without secrets

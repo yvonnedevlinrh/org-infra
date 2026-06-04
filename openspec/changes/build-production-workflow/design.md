@@ -1,3 +1,5 @@
+# Build Production Workflow — Design
+
 ## Context
 
 The council review test workflow (`ci_council_review_test.yml`) has validated
@@ -119,14 +121,14 @@ as of June 2026.
 
 **Pinned versions:**
 
-| Action | Version | SHA |
-|--------|---------|-----|
-| `actions/checkout` | v6.0.3 | `df4cb1c069e1874edd31b4311f1884172cec0e10` |
-| `actions/upload-artifact` | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
-| `actions/download-artifact` | v8.0.1 | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` |
-| `google-github-actions/auth` | v3.0.0 | `7c6bc770dae815cd3e89ee6cdf493a5fab2cc093` |
-| `google-github-actions/setup-gcloud` | v3.0.1 | `aa5489c8933f4cc7a4f7d45035b3b1440c9c10db` |
-| `peter-evans/create-or-update-comment` | v5.0.0 | `e8674b075228eee787fea43ef493e45ece1004c9` |
+| Action                                  | Version | SHA                                        |
+| --------------------------------------- | ------- | ------------------------------------------ |
+| `actions/checkout`                      | v6.0.3  | `df4cb1c069e1874edd31b4311f1884172cec0e10` |
+| `actions/upload-artifact`               | v7.0.1  | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
+| `actions/download-artifact`             | v8.0.1  | `3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` |
+| `google-github-actions/auth`            | v3.0.0  | `7c6bc770dae815cd3e89ee6cdf493a5fab2cc093` |
+| `google-github-actions/setup-gcloud`    | v3.0.1  | `aa5489c8933f4cc7a4f7d45035b3b1440c9c10db` |
+| `peter-evans/create-or-update-comment`  | v5.0.0  | `e8674b075228eee787fea43ef493e45ece1004c9` |
 
 **Alternative**: Use mutable tags (`@v3`, `@v5`).
 

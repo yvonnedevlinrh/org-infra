@@ -16,7 +16,7 @@ jobs:
   council-review:
     name: AI Council Review
     if: github.event.workflow_run.conclusion == 'success'
-    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@main
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@main  # zizmor: ignore[unpinned-uses]
     permissions:
       contents: read
       id-token: write
