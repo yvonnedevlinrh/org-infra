@@ -1,0 +1,29 @@
+---
+name: Council Review
+
+on:
+  workflow_run:
+    workflows: ["Council Review - Collect"]
+    types: [completed]
+
+concurrency:
+  group: council-review-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  council-review:
+    name: AI Council Review
+    if: github.event.workflow_run.conclusion == 'success'
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@main
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      actions: read
+    with:
+      triggering_run_id: ${{ github.event.workflow_run.id }}
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}

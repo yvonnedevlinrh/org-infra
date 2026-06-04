@@ -1,0 +1,176 @@
+---
+name: Reusable Council Review
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: "Claude model ID for Vertex AI (must be enabled on the GCP project)"
+        required: false
+        type: string
+        default: "claude-sonnet-4-6"
+      region:
+        description: "Vertex AI region (use 'global' for automatic capacity routing)"
+        required: false
+        type: string
+        default: "global"
+      max_diff_lines:
+        description: "Maximum diff lines to include in the review prompt"
+        required: false
+        type: number
+        default: 1000
+      triggering_run_id:
+        description: "Workflow run ID of the collect workflow (for artifact download)"
+        required: true
+        type: number
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER:
+        description: "WIF provider resource name for Vertex AI authentication"
+        required: false
+      GCP_PROJECT_ID:
+        description: "GCP project ID where Claude models are enabled"
+        required: false
+
+permissions: {}
+
+jobs:
+  council-review:
+    name: Council Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      actions: read
+    env:
+      CLAUDE_CODE_USE_VERTEX: "1"
+      CLOUD_ML_REGION: ${{ inputs.region }}
+      ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+    steps:
+      - name: Check WIF credentials
+        id: gate
+        env:
+          HAS_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}
+        run: |
+          if [[ "${HAS_WIF}" != "true" ]]; then
+            echo "::notice::No WIF credentials configured — skipping council review"
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "should_review=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download diff artifact
+        if: steps.gate.outputs.should_review == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: council-review-diff
+          run-id: ${{ inputs.triggering_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Extract PR metadata
+        if: steps.gate.outputs.should_review == 'true'
+        id: meta
+        run: |
+          PR_NUMBER=$(jq -r '.number' pr-meta.json)
+          PR_TITLE=$(jq -r '.title' pr-meta.json)
+          PR_HEAD_SHA=$(jq -r '.head_sha' pr-meta.json)
+          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "pr_title=${PR_TITLE}" >> "$GITHUB_OUTPUT"
+          echo "pr_head_sha=${PR_HEAD_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare diff for review
+        if: steps.gate.outputs.should_review == 'true'
+        id: diff
+        env:
+          MAX_LINES: ${{ inputs.max_diff_lines }}
+        run: |
+          TOTAL_LINES=$(wc -l < pr-diff.patch)
+          if [[ "${TOTAL_LINES}" -gt "${MAX_LINES}" ]]; then
+            head -n "${MAX_LINES}" pr-diff.patch > pr-diff-truncated.patch
+            echo "truncated=true" >> "$GITHUB_OUTPUT"
+            echo "total_lines=${TOTAL_LINES}" >> "$GITHUB_OUTPUT"
+            echo "::warning::Diff truncated from ${TOTAL_LINES} to ${MAX_LINES} lines"
+          else
+            cp pr-diff.patch pr-diff-truncated.patch
+            echo "truncated=false" >> "$GITHUB_OUTPUT"
+            echo "total_lines=${TOTAL_LINES}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Authenticate to Google Cloud (direct WIF)
+        if: steps.gate.outputs.should_review == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Set up gcloud CLI
+        if: steps.gate.outputs.should_review == 'true'
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Install Claude Code CLI
+        if: steps.gate.outputs.should_review == 'true'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "${HOME}/.claude/bin" >> "$GITHUB_PATH"
+
+      - name: Run council review
+        if: steps.gate.outputs.should_review == 'true'
+        id: review
+        env:
+          MODEL: ${{ inputs.model }}
+          PR_TITLE: ${{ steps.meta.outputs.pr_title }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          TRUNCATED: ${{ steps.diff.outputs.truncated }}
+          TOTAL_LINES: ${{ steps.diff.outputs.total_lines }}
+          MAX_LINES: ${{ inputs.max_diff_lines }}
+        run: |
+          TRUNCATION_NOTE=""
+          if [[ "${TRUNCATED}" == "true" ]]; then
+            TRUNCATION_NOTE="Note: The diff was truncated from ${TOTAL_LINES} to ${MAX_LINES} lines. Review covers the first ${MAX_LINES} lines only."
+          fi
+
+          DIFF_CONTENT=$(cat pr-diff-truncated.patch)
+
+          PROMPT="You are a code reviewer for the ComplyTime project.
+          Review the following pull request diff and provide constructive feedback.
+
+          PR Title: ${PR_TITLE}
+          ${TRUNCATION_NOTE}
+
+          Diff:
+          ${DIFF_CONTENT}
+
+          Provide a structured review covering:
+          1. Summary of changes
+          2. Potential issues or concerns
+          3. Suggestions for improvement
+          4. Overall assessment
+
+          Keep the review concise and actionable."
+
+          claude -p "${PROMPT}" --model "${MODEL}" > claude_raw.txt 2>&1 || true
+
+          MARKER="<!-- council-review-bot -->"
+          {
+            echo "${MARKER}"
+            echo "## AI Council Review"
+            echo ""
+            if [[ -s claude_raw.txt ]]; then
+              cat claude_raw.txt
+            else
+              echo "_Claude review produced no output._"
+            fi
+            echo ""
+            echo "---"
+            echo "_Model: \`${MODEL}\` | Commit: \`${PR_HEAD_SHA:0:7}\`_"
+          } > review_output.txt
+
+      - name: Post review comment
+        if: steps.gate.outputs.should_review == 'true'
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
+        with:
+          issue-number: ${{ steps.meta.outputs.pr_number }}
+          body-path: review_output.txt
+          edit-mode: replace
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- council-review-bot -->"

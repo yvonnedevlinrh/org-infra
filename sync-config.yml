@@ -47,6 +47,18 @@ files_to_sync:
           complytime-providers: "true"
           complytime-collector-components: "true"
 
+  - source: .github/workflows/ci_council_review_collect.yml
+    destination: .github/workflows/ci_council_review_collect.yml
+    exclude_repos:
+      - .github
+      - community
+
+  - source: .github/workflows/ci_council_review.yml
+    destination: .github/workflows/ci_council_review.yml
+    exclude_repos:
+      - .github
+      - community
+
   - source: .github/workflows/ci_crapload.yml
     destination: .github/workflows/ci_crapload.yml
     exclude_repos:

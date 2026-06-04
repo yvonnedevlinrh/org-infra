@@ -1,0 +1,91 @@
+---
+name: Council Review - Collect
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  gate-check:
+    name: Gate Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_collect: ${{ steps.gate.outputs.should_collect }}
+      skip_reason: ${{ steps.gate.outputs.skip_reason }}
+    steps:
+      - name: Evaluate gate conditions
+        id: gate
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          if [[ "${PR_DRAFT}" == "true" ]]; then
+            echo "should_collect=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Draft PR — skipping council review" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${PR_AUTHOR}" == "dependabot[bot]" ]]; then
+            echo "should_collect=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Dependabot PR — skipping council review" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_collect=true" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=" >> "$GITHUB_OUTPUT"
+
+      - name: Log skip reason
+        if: steps.gate.outputs.should_collect == 'false'
+        env:
+          SKIP_REASON: ${{ steps.gate.outputs.skip_reason }}
+        run: echo "::notice::${SKIP_REASON}"
+
+  collect-diff:
+    name: Collect PR Diff
+    needs: gate-check
+    if: needs.gate-check.outputs.should_collect == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Collect PR diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          gh pr diff "${PR_NUMBER}" \
+            --repo "${{ github.repository }}" > pr-diff.patch
+
+      - name: Write PR metadata
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          jq -n \
+            --arg number "${PR_NUMBER}" \
+            --arg head_sha "${PR_HEAD_SHA}" \
+            --arg base_ref "${PR_BASE_REF}" \
+            --arg title "${PR_TITLE}" \
+            --arg repo "${{ github.repository }}" \
+            '{number: $number, head_sha: $head_sha, base_ref: $base_ref, title: $title, repo: $repo}' \
+            > pr-meta.json
+
+      - name: Upload diff artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: council-review-diff
+          path: |
+            pr-diff.patch
+            pr-meta.json
+          retention-days: 1
