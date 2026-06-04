@@ -2,7 +2,7 @@
 name: Council Review
 
 on:
-  workflow_run:
+  workflow_run:  # zizmor: ignore[dangerous-triggers] — by design for fork PR support (two-workflow chain pattern)
     workflows: ["Council Review - Collect"]
     types: [completed]
   # TODO: Remove workflow_dispatch after production validation
@@ -26,7 +26,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     # TODO: Change back to @main before merging
-    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production  # zizmor: ignore[unpinned-uses]
     permissions:
       contents: read
       id-token: write

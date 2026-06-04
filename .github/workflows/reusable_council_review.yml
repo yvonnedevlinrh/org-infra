@@ -74,9 +74,11 @@ jobs:
           PR_NUMBER=$(jq -r '.number' pr-meta.json)
           PR_TITLE=$(jq -r '.title' pr-meta.json)
           PR_HEAD_SHA=$(jq -r '.head_sha' pr-meta.json)
-          echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "pr_title=${PR_TITLE}" >> "$GITHUB_OUTPUT"
-          echo "pr_head_sha=${PR_HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          {
+            echo "pr_number=${PR_NUMBER}"
+            echo "pr_title=${PR_TITLE}"
+            echo "pr_head_sha=${PR_HEAD_SHA}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Prepare diff for review
         if: steps.gate.outputs.should_review == 'true'
