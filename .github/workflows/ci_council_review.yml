@@ -5,9 +5,16 @@ on:
   workflow_run:
     workflows: ["Council Review - Collect"]
     types: [completed]
+  # TODO: Remove workflow_dispatch after production validation
+  workflow_dispatch:
+    inputs:
+      triggering_run_id:
+        description: "Run ID of the collect workflow to download artifacts from"
+        required: true
+        type: number
 
 concurrency:
-  group: council-review-${{ github.event.workflow_run.id }}
+  group: council-review-${{ github.event.workflow_run.id || github.run_id }}
   cancel-in-progress: true
 
 permissions: {}
@@ -15,15 +22,18 @@ permissions: {}
 jobs:
   council-review:
     name: AI Council Review
-    if: github.event.workflow_run.conclusion == 'success'
-    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@main
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    # TODO: Change back to @main before merging
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production
     permissions:
       contents: read
       id-token: write
       pull-requests: write
       actions: read
     with:
-      triggering_run_id: ${{ github.event.workflow_run.id }}
+      triggering_run_id: ${{ github.event.inputs.triggering_run_id && fromJSON(github.event.inputs.triggering_run_id) || github.event.workflow_run.id }}
     secrets:
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
