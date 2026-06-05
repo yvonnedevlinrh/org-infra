@@ -113,46 +113,121 @@ jobs:
         if: steps.gate.outputs.should_review == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Run council review
+      - name: Build review prompt
         if: steps.gate.outputs.should_review == 'true'
-        id: review
         env:
-          MODEL: ${{ inputs.model }}
           PR_TITLE: ${{ steps.meta.outputs.pr_title }}
-          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
           TRUNCATED: ${{ steps.diff.outputs.truncated }}
           TOTAL_LINES: ${{ steps.diff.outputs.total_lines }}
           MAX_LINES: ${{ inputs.max_diff_lines }}
         run: |
           TRUNCATION_NOTE=""
           if [[ "${TRUNCATED}" == "true" ]]; then
-            TRUNCATION_NOTE="Note: The diff was truncated from ${TOTAL_LINES} to ${MAX_LINES} lines. Review covers the first ${MAX_LINES} lines only."
+            TRUNCATION_NOTE="Note: The diff was truncated from ${TOTAL_LINES} to ${MAX_LINES} lines. Review only covers the included portion."
           fi
 
-          DIFF_CONTENT=$(cat pr-diff-truncated.patch)
+          cat > review_prompt.txt <<'PROMPT_HEADER'
+          You are a code reviewer for the ComplyTime project.
+          Review the following pull request diff and provide feedback as inline code review comments.
 
-          PROMPT="You are a code reviewer for the ComplyTime project.
-          Review the following pull request diff and provide constructive feedback.
+          IMPORTANT: Respond with ONLY a valid JSON object. No markdown fences, no extra text.
+          Use this exact schema:
+          {
+            "summary": "2-3 sentence overall assessment of the PR",
+            "inline_comments": [
+              {
+                "path": "relative/path/to/file.ext",
+                "line": 42,
+                "body": "Your review comment for this specific line"
+              }
+            ]
+          }
 
-          PR Title: ${PR_TITLE}
-          ${TRUNCATION_NOTE}
+          Rules for inline_comments:
+          - "path" must match a file path from the diff (the path after "b/" in diff headers)
+          - "line" must be a line number in the NEW version of the file (from the @@ +start,count @@ hunk headers, counting down for added/unchanged lines)
+          - Focus on substantive issues: bugs, security concerns, performance, correctness, missing error handling
+          - Skip trivial style or formatting issues
+          - Maximum 10 inline comments; use fewer if the code is clean
+          - If no inline comments are warranted, use an empty array []
+          - Each "body" should be concise (1-3 sentences) and actionable
 
-          Diff:
-          ${DIFF_CONTENT}
+          PROMPT_HEADER
 
-          Provide a structured review covering:
-          1. Summary of changes
-          2. Potential issues or concerns
-          3. Suggestions for improvement
-          4. Overall assessment
+          {
+            echo "PR Title: ${PR_TITLE}"
+            echo "${TRUNCATION_NOTE}"
+            echo ""
+            echo "Diff:"
+            cat pr-diff-truncated.patch
+          } >> review_prompt.txt
 
-          Keep the review concise and actionable."
-
+      - name: Run council review
+        if: steps.gate.outputs.should_review == 'true'
+        id: review
+        env:
+          MODEL: ${{ inputs.model }}
+        run: |
+          PROMPT=$(cat review_prompt.txt)
           if ! claude -p "${PROMPT}" --model "${MODEL}" > claude_raw.txt 2>claude_err.txt; then
             echo "::warning::Claude invocation failed (exit $?)"
             cat claude_err.txt >&2
           fi
 
+          if jq -e '.summary and .inline_comments' claude_raw.txt > /dev/null 2>&1; then
+            echo "review_mode=inline" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Claude output is not structured JSON, falling back to PR comment"
+            echo "review_mode=comment" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post inline review
+        if: steps.gate.outputs.should_review == 'true' && steps.review.outputs.review_mode == 'inline'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          MODEL: ${{ inputs.model }}
+          REPO: ${{ github.repository }}
+        run: |
+          SUMMARY=$(jq -r '.summary' claude_raw.txt)
+          COMMENT_COUNT=$(jq '.inline_comments | length' claude_raw.txt)
+
+          BODY=$(cat <<EOF
+          <!-- council-review-bot -->
+          ## AI Council Review
+
+          ${SUMMARY}
+
+          ---
+          _Model: \`${MODEL}\` | Commit: \`${PR_HEAD_SHA:0:7}\` | Inline comments: ${COMMENT_COUNT}_
+          EOF
+          )
+
+          if [[ "${COMMENT_COUNT}" -gt 0 ]]; then
+            jq -n \
+              --arg commit_id "${PR_HEAD_SHA}" \
+              --arg body "${BODY}" \
+              --argjson comments "$(jq '[.inline_comments[] | {path, line, side: "RIGHT", body}]' claude_raw.txt)" \
+              '{commit_id: $commit_id, body: $body, event: "COMMENT", comments: $comments}' | \
+            gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
+              --method POST --input - || {
+              echo "::warning::Inline review post failed, falling back to PR comment"
+              gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${BODY}"
+            }
+          else
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${BODY}"
+          fi
+
+      - name: Post comment review (fallback)
+        if: steps.gate.outputs.should_review == 'true' && steps.review.outputs.review_mode == 'comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          MODEL: ${{ inputs.model }}
+          REPO: ${{ github.repository }}
+        run: |
           MARKER="<!-- council-review-bot -->"
           {
             echo "${MARKER}"
@@ -166,13 +241,5 @@ jobs:
             echo ""
             echo "---"
             echo "_Model: \`${MODEL}\` | Commit: \`${PR_HEAD_SHA:0:7}\`_"
-          } > review_output.txt
-
-      - name: Post review comment
-        if: steps.gate.outputs.should_review == 'true'
-        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
-        with:
-          issue-number: ${{ steps.meta.outputs.pr_number }}
-          body-path: review_output.txt
-          edit-mode: replace
-          reactions: "eyes"
+          } > review_fallback.txt
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file review_fallback.txt
