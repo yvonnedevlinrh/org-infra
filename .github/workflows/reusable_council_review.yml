@@ -181,6 +181,21 @@ jobs:
             echo "review_mode=comment" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Clean up previous bot comments
+        if: steps.gate.outputs.should_review == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[] | select(.body | contains("<!-- council-review-bot -->")) | .id' | \
+          while read -r comment_id; do
+            if [[ -n "${comment_id}" ]]; then
+              gh api "repos/${REPO}/issues/comments/${comment_id}" --method DELETE || true
+            fi
+          done
+
       - name: Post inline review
         if: steps.gate.outputs.should_review == 'true' && steps.review.outputs.review_mode == 'inline'
         env:
