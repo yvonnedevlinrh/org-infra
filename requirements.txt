@@ -13,6 +13,6 @@ requests==2.34.2
 pytest==9.0.3
 
 # Linting
-ruff==0.15.15
+ruff==0.15.16
 yamllint==1.38.0
 
