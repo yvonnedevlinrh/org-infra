@@ -1,6 +1,14 @@
 ---
-name: Council Review - Collect
+name: Council Review - Collect PR Diff
 
+# --------------------------------------------------------------------------
+# Fork-safe PR diff collection for the AI council review two-workflow chain.
+# Runs on pull_request (no secrets needed), collects the PR diff and
+# metadata, then uploads them as an artifact for the consumer workflow
+# (ci_council_review.yml) to pick up via workflow_run.
+#
+# Chain: [this] -> ci_council_review.yml -> reusable_council_review.yml
+# --------------------------------------------------------------------------
 on:
   pull_request:
     types: [opened, synchronize, reopened]

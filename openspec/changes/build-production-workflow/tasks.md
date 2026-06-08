@@ -31,7 +31,7 @@
 - [ ] 3.1 Create `.github/workflows/ci_council_review.yml` with `workflow_run` trigger on `ci_council_review_collect.yml` completion
 - [ ] 3.2 Add condition: only run when triggering workflow concluded with `success`
 - [ ] 3.3 Call `reusable_council_review.yml` with `secrets: { GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_PROJECT_ID }` and `inputs: { triggering_run_id: ${{ github.event.workflow_run.id }} }`
-- [ ] 3.4 Add `concurrency` block: group `council-review-${{ github.event.workflow_run.id }}`, `cancel-in-progress: true`
+- [ ] 3.4 Add `concurrency` block: group `council-review-${{ github.event.workflow_run.head_sha }}`, `cancel-in-progress: true`
 - [ ] 3.5 Set workflow-level `permissions: {}` (none); job-level permissions inherited by reusable workflow
 
 ## 4. Sync Configuration
