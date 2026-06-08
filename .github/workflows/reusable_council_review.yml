@@ -32,7 +32,7 @@ on:
         description: "Maximum diff lines to include in the review prompt"
         required: false
         type: number
-        default: 1000
+        default: 2000
       triggering_run_id:
         description: "Workflow run ID of the collect workflow (for artifact download)"
         required: true
