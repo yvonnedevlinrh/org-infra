@@ -21,6 +21,7 @@ jobs:
     permissions:
       contents: read
       issues: read
+      pull-requests: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -28,15 +29,17 @@ jobs:
           persist-credentials: false
 
       - name: Install Dependencies
-        if: ${{ github.event.pull_request.title != '' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         run: npm install @commitlint/cli @commitlint/config-conventional
 
       - name: Validate PR Title
-        if: ${{ github.event.pull_request.title != '' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         env:
-          PR_TITLE: "${{ github.event.pull_request.title }}"
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-            echo "PR title provided: $PR_TITLE"
+            PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json title --jq '.title')
+            echo "PR title (live): $PR_TITLE"
             echo "$PR_TITLE" | npx commitlint --config commitlint.config.js
 
       - name: Run MegaLinter
