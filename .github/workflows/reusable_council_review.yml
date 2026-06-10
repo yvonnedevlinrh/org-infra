@@ -167,6 +167,12 @@ jobs:
             gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
               --method POST --input - || {
               echo "::warning::Inline review post failed, falling back to PR comment"
+              {
+                echo ""
+                echo "### Findings"
+                echo ""
+                jq -r '.inline_comments[] | "- **\(.path):\(.line)** — \(.body)"' "${REVIEW_JSON}"
+              } >> review_body.txt
               gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file review_body.txt
             }
           else
