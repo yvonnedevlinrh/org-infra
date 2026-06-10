@@ -1,0 +1,203 @@
+---
+name: Reusable Council Review
+
+# --------------------------------------------------------------------------
+# Reusable workflow for AI-assisted code review using OpenCode on Vertex AI.
+# Handles org-specific concerns: WIF authentication, artifact download from
+# the fork-safe two-workflow chain, and PR comment posting with bot marker
+# deduplication.
+#
+# The review logic itself is delegated to the council-review-action in
+# unbound-force, which discovers Divisor personas, pre-fetches PR context,
+# runs the review via opencode run, and outputs structured JSON.
+#
+# Chain: ci_council_review_collect.yml -> ci_council_review.yml -> [this]
+# --------------------------------------------------------------------------
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: "Model in provider/model format for OpenCode"
+        required: false
+        type: string
+        default: "google-vertex-anthropic/claude-sonnet-4-6"
+      region:
+        description: "Vertex AI region (use 'global' for automatic capacity routing)"
+        required: false
+        type: string
+        default: "global"
+      max_diff_lines:
+        description: "Maximum diff lines to include in the review prompt"
+        required: false
+        type: number
+        default: 2000
+      triggering_run_id:
+        description: "Workflow run ID of the collect workflow (for artifact download)"
+        required: true
+        type: number
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER:
+        description: "WIF provider resource name for Vertex AI authentication"
+        required: false
+      GCP_PROJECT_ID:
+        description: "GCP project ID where Claude models are enabled"
+        required: false
+
+permissions: {}
+
+jobs:
+  council-review:
+    name: Council Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      actions: read
+    env:
+      VERTEX_LOCATION: ${{ inputs.region }}
+    steps:
+      - name: Check WIF credentials
+        id: gate
+        env:
+          HAS_WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}
+        run: |
+          if [[ "${HAS_WIF}" != "true" ]]; then
+            echo "::notice::No WIF credentials configured - skipping council review"
+            echo "should_review=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "should_review=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout calling repo
+        if: steps.gate.outputs.should_review == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Download diff artifact
+        if: steps.gate.outputs.should_review == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: council-review-diff
+          run-id: ${{ inputs.triggering_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Extract PR metadata
+        if: steps.gate.outputs.should_review == 'true'
+        id: meta
+        run: |
+          PR_NUMBER=$(jq -r '.number' pr-meta.json)
+          PR_HEAD_SHA=$(jq -r '.head_sha' pr-meta.json)
+          {
+            echo "pr_number=${PR_NUMBER}"
+            echo "pr_head_sha=${PR_HEAD_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud (direct WIF)
+        if: steps.gate.outputs.should_review == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Set up gcloud CLI
+        if: steps.gate.outputs.should_review == 'true'
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      # TODO: remove continue-on-error once council review is stable
+      - name: Run council review
+        if: steps.gate.outputs.should_review == 'true'
+        id: review
+        continue-on-error: true
+        uses: unbound-force/unbound-force/council-review-action@feat/council-review-action  # zizmor: ignore[unpinned-uses]
+        with:
+          model: ${{ inputs.model }}
+          max-diff-lines: ${{ inputs.max_diff_lines }}
+          diff-path: pr-diff.patch
+          meta-path: pr-meta.json
+          github-token: ${{ github.token }}
+
+      - name: Clean up previous bot comments
+        if: steps.gate.outputs.should_review == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[] | select(.body | contains("<!-- council-review-bot -->")) | .id' | \
+          while read -r comment_id; do
+            if [[ -n "${comment_id}" ]]; then
+              gh api "repos/${REPO}/issues/comments/${comment_id}" --method DELETE || true
+            fi
+          done
+
+      - name: Post inline review
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.review.outcome == 'success' &&
+          steps.review.outputs.review-mode == 'inline'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          MODEL: ${{ inputs.model }}
+          REPO: ${{ github.repository }}
+          REVIEW_JSON: ${{ steps.review.outputs.review-json }}
+        run: |
+          COMMENT_COUNT=$(jq '.inline_comments | length' "${REVIEW_JSON}")
+
+          {
+            echo "<!-- council-review-bot -->"
+            echo "## AI Council Review"
+            echo ""
+            jq -r '.summary' "${REVIEW_JSON}"
+            echo ""
+            echo "---"
+            echo "_Model: \`${MODEL}\` | Commit: \`${PR_HEAD_SHA:0:7}\` | Inline comments: ${COMMENT_COUNT}_"
+          } > review_body.txt
+
+          if [[ "${COMMENT_COUNT}" -gt 0 ]]; then
+            jq -n \
+              --arg commit_id "${PR_HEAD_SHA}" \
+              --rawfile body review_body.txt \
+              --argjson comments "$(jq '[.inline_comments[] | {path, line, side: "RIGHT", body}]' "${REVIEW_JSON}")" \
+              '{commit_id: $commit_id, body: $body, event: "COMMENT", comments: $comments}' | \
+            gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
+              --method POST --input - || {
+              echo "::warning::Inline review post failed, falling back to PR comment"
+              gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file review_body.txt
+            }
+          else
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file review_body.txt
+          fi
+
+      - name: Post comment review (fallback)
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.review.outcome == 'success' &&
+          steps.review.outputs.review-mode == 'comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_HEAD_SHA: ${{ steps.meta.outputs.pr_head_sha }}
+          MODEL: ${{ inputs.model }}
+          REPO: ${{ github.repository }}
+          REVIEW_JSON: ${{ steps.review.outputs.review-json }}
+        run: |
+          MARKER="<!-- council-review-bot -->"
+          {
+            echo "${MARKER}"
+            echo "## AI Council Review"
+            echo ""
+            if [[ -s "${REVIEW_JSON}" ]]; then
+              jq -r '.summary' "${REVIEW_JSON}"
+            else
+              echo "_Council review produced no output._"
+            fi
+            echo ""
+            echo "---"
+            echo "_Model: \`${MODEL}\` | Commit: \`${PR_HEAD_SHA:0:7}\`_"
+          } > review_fallback.txt
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body-file review_fallback.txt

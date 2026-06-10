@@ -2,6 +2,10 @@
 
 This repository uses AI tools to help contributors code, review PRs, and manage feature specifications. [OpenCode](https://opencode.ai) is the standardized agent tool. [OpenSpec](https://opencode.ai) is the recommended spec-driven framework — both OpenSpec and SpecKit are agent-agnostic and work with any supported AI tool.
 
+## Council Review
+
+Pull requests are automatically reviewed by an AI council powered by OpenCode on Vertex AI. The review uses the Divisor agent personas from the [unbound-force](https://github.com/unbound-force/unbound-force) project to provide multi-perspective code review covering security, architecture, testing, SRE, and intent alignment.
+
 ## Getting Started
 
 ### OpenCode (Recommended)

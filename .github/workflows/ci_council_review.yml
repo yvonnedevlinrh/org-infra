@@ -1,0 +1,45 @@
+---
+name: Council Review
+
+# --------------------------------------------------------------------------
+# Consumer workflow for the AI council review two-workflow chain.
+# Triggered by workflow_run when the collect workflow completes successfully.
+# Passes the triggering run ID and GCP secrets to the reusable review
+# workflow, which performs the actual Claude-based code review.
+#
+# Chain: ci_council_review_collect.yml -> [this] -> reusable_council_review.yml
+# --------------------------------------------------------------------------
+on:
+  workflow_dispatch:
+    inputs:
+      triggering_run_id:
+        description: >-
+          Run ID of the collect workflow (for artifact
+          download). Required for manual testing.
+        required: true
+        type: number
+  workflow_run:  # zizmor: ignore[dangerous-triggers] - by design for fork PR support (two-workflow chain pattern)
+    workflows: ["Council Review - Collect PR Diff"]
+    types: [completed]
+
+concurrency:
+  group: council-review-${{ github.event.workflow_run.head_sha || github.run_id }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  council-review:
+    name: AI Council Review
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production  # zizmor: ignore[unpinned-uses]
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      actions: read
+    with:
+      triggering_run_id: ${{ fromJSON(github.event.inputs.triggering_run_id || github.event.workflow_run.id) }}
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
