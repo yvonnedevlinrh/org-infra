@@ -55,7 +55,7 @@ jobs:
       pull-requests: write
       actions: read
     env:
-      CLOUD_ML_REGION: ${{ inputs.region }}
+      VERTEX_LOCATION: ${{ inputs.region }}
       ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
     steps:
       - name: Check WIF credentials
