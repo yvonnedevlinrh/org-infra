@@ -10,16 +10,17 @@ name: Council Review
 # Chain: ci_council_review_collect.yml -> [this] -> reusable_council_review.yml
 # --------------------------------------------------------------------------
 on:
-  workflow_run:  # zizmor: ignore[dangerous-triggers] - by design for fork PR support (two-workflow chain pattern)
-    workflows: ["Council Review - Collect PR Diff"]
-    types: [completed]
-  # TODO: Remove workflow_dispatch after production validation
   workflow_dispatch:
     inputs:
       triggering_run_id:
-        description: "Run ID of the collect workflow to download artifacts from"
+        description: >-
+          Run ID of the collect workflow (for artifact
+          download). Required for manual testing.
         required: true
         type: number
+  workflow_run:  # zizmor: ignore[dangerous-triggers] - by design for fork PR support (two-workflow chain pattern)
+    workflows: ["Council Review - Collect PR Diff"]
+    types: [completed]
 
 concurrency:
   group: council-review-${{ github.event.workflow_run.head_sha || github.run_id }}
@@ -33,7 +34,6 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    # TODO: Change back to @main before merging
     uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production  # zizmor: ignore[unpinned-uses]
     permissions:
       contents: read
@@ -41,7 +41,9 @@ jobs:
       pull-requests: write
       actions: read
     with:
-      triggering_run_id: ${{ inputs.triggering_run_id && fromJSON(inputs.triggering_run_id) || github.event.workflow_run.id }}
+      triggering_run_id: >-
+        ${{ github.event.inputs.triggering_run_id ||
+            github.event.workflow_run.id }}
     secrets:
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
