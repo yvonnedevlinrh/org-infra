@@ -31,9 +31,7 @@ permissions: {}
 jobs:
   council-review:
     name: AI Council Review
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     uses: complytime/org-infra/.github/workflows/reusable_council_review.yml@feat/council-review-production  # zizmor: ignore[unpinned-uses]
     permissions:
       contents: read
@@ -41,9 +39,7 @@ jobs:
       pull-requests: write
       actions: read
     with:
-      triggering_run_id: >-
-        ${{ github.event.inputs.triggering_run_id ||
-            github.event.workflow_run.id }}
+      triggering_run_id: ${{ fromJSON(github.event.inputs.triggering_run_id || github.event.workflow_run.id) }}
     secrets:
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
