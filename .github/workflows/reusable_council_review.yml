@@ -17,10 +17,10 @@ on:
   workflow_call:
     inputs:
       model:
-        description: "Model in provider/model format for OpenCode (routed via Vertex AI)"
+        description: "Model in provider/model format for OpenCode"
         required: false
         type: string
-        default: "vertex/claude-sonnet-4-6"
+        default: "google-vertex-anthropic/claude-sonnet-4-6"
       region:
         description: "Vertex AI region (use 'global' for automatic capacity routing)"
         required: false
@@ -56,7 +56,6 @@ jobs:
       actions: read
     env:
       VERTEX_LOCATION: ${{ inputs.region }}
-      ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
     steps:
       - name: Check WIF credentials
         id: gate
