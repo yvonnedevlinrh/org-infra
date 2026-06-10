@@ -54,6 +54,11 @@ on:
         required: false
         default: 'latest'
         type: string
+      tag_latest:
+        description: 'Also tag the artifact as latest after pushing the primary tag'
+        required: false
+        default: false
+        type: boolean
       generate_attestations:
         description: "Generate SLSA provenance and SBOM. Values: auto (based on ref_protected), true (always). Default: auto"
         required: false
@@ -168,6 +173,13 @@ jobs:
             exit 1
           fi
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag as latest
+        if: ${{ inputs.tag_latest }}
+        env:
+          IMAGE_NAME: ${{ inputs.image_name }}
+          TAG: ${{ inputs.tag }}
+        run: oras tag "ghcr.io/${IMAGE_NAME}:${TAG}" latest
 
       # NOTE: This step is duplicated in reusable_publish_ghcr.yml.
       # If a third workflow needs it, extract to a composite action.
