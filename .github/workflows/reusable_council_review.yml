@@ -105,9 +105,11 @@ jobs:
         if: steps.gate.outputs.should_review == 'true'
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
+      # TODO: remove continue-on-error once council review is stable
       - name: Run council review
         if: steps.gate.outputs.should_review == 'true'
         id: review
+        continue-on-error: true
         uses: unbound-force/unbound-force/council-review-action@feat/council-review-action  # zizmor: ignore[unpinned-uses]
         with:
           model: ${{ inputs.model }}
@@ -132,7 +134,10 @@ jobs:
           done
 
       - name: Post inline review
-        if: steps.gate.outputs.should_review == 'true' && steps.review.outputs.review-mode == 'inline'
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.review.outcome == 'success' &&
+          steps.review.outputs.review-mode == 'inline'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
@@ -169,7 +174,10 @@ jobs:
           fi
 
       - name: Post comment review (fallback)
-        if: steps.gate.outputs.should_review == 'true' && steps.review.outputs.review-mode == 'comment'
+        if: >-
+          steps.gate.outputs.should_review == 'true' &&
+          steps.review.outcome == 'success' &&
+          steps.review.outputs.review-mode == 'comment'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
