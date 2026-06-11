@@ -1,6 +1,6 @@
 # Test Promote Image Workflow
 # Validates crane copy + cosign sign promotion using GHCR-to-GHCR.
-# Exercises the same commands as resuable_publish_quay.yml without
+# Exercises the same commands as reusable_publish_quay.yml without
 # requiring Quay credentials.
 
 name: Test Quay Promote
@@ -10,7 +10,7 @@ name: Test Quay Promote
     branches:
       - main
     paths:
-      - ".github/workflows/resuable_publish_quay.yml"
+      - ".github/workflows/reusable_publish_quay.yml"
       - ".github/workflows/ci_test_publish_quay.yml"
       - ".github/ci-tests/ghcr-publish/Containerfile"
 
@@ -31,7 +31,7 @@ jobs:
         id: filter
         with:
           files: |
-            .github/workflows/resuable_publish_quay.yml
+            .github/workflows/reusable_publish_quay.yml
             .github/workflows/ci_test_publish_quay.yml
             .github/ci-tests/ghcr-publish/**
 
