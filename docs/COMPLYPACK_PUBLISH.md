@@ -45,12 +45,13 @@ GHCR is the staging area. Every push to `main` that modifies files under
 commit-based tag. The artifact is signed with Sigstore keyless signing and
 includes SLSA provenance and SBOM attestations.
 
-Quay is the production registry. Promotion from GHCR to Quay happens through
+Quay is the production registry. The current procedure promotes from GHCR to Quay through
 two paths: automatically when a GitHub Release is published, or manually via
 `workflow_dispatch`. Manual promotion exists because GitHub Actions does not
 trigger downstream workflows from release events created by `GITHUB_TOKEN`-based
 workflows — see [Manual Quay Promotion](#manual-quay-promotion) for details.
-Quay tags are immutable — publishing the same tag twice fails.
+
+> **Note:** this limitation will be addressed in a follow-up PR by using an APP Token.
 
 ```text
 Push to main              Release published         workflow_dispatch

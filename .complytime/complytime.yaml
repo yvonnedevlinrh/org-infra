@@ -3,7 +3,7 @@ policies:
     id: ampel-bp
 
 complypacks:
-  - url: quay.io/complytime/complypack-ampel-branch-protection:v0.4.0
+  - url: quay.io/complytime/complypack-ampel-branch-protection@latest
     id: ampel-bp-pack
 
 targets:
