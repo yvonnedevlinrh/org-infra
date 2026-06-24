@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Go toolchain patch updates only — shared preset for complytime org",
+  "dependencyDashboard": false,
+  "enabledManagers": ["gomod"],
+  "packageRules": [
+    {
+      "description": "Disable all gomod dependency updates by default",
+      "matchManagers": ["gomod"],
+      "enabled": false
+    },
+    {
+      "description": "Re-enable Go toolchain for version lookup",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["toolchain"],
+      "enabled": true,
+      "separateMinorPatch": true,
+      "automerge": false,
+      "labels": ["dependencies"],
+      "commitMessagePrefix": "chore(deps):"
+    },
+    {
+      "description": "Suppress non-patch toolchain updates (minor/major)",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["toolchain"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    }
+  ],
+  "postUpdateOptions": ["gomodTidy", "gomodVendor"]
+}

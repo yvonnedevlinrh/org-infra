@@ -1,0 +1,75 @@
+# Centralized Renovate Runner
+# ===========================
+# Runs Renovate via GitHub Actions on a daily schedule to manage Go
+# toolchain patch updates across configured repositories. Target repos
+# and update rules are defined in renovate-config.js and
+# go-toolchain-patches.json.
+#
+# Authentication uses a dedicated GitHub App (complytime-renovate[bot])
+# with minimal permissions (contents:write, pull-requests:write).
+# The App is installed only on the target Go repositories — not on
+# org-infra itself.
+
+name: Renovate
+
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >-
+          Dry-run mode: "full" (simulate PR creation), "lookup"
+          (discover updates only), or "none" for normal operation.
+        required: false
+        type: choice
+        default: none
+        options:
+          - none
+          - full
+          - lookup
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout org-infra
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RENOVATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Run Renovate
+        uses: renovatebot/github-action@6d859fc95779be83a0335ca704879b47e5d79641 # v46.1.16
+        with:
+          configurationFile: renovate-config.js
+          token: ${{ steps.generate-token.outputs.token }}
+        env:
+          LOG_LEVEL: info
+          RENOVATE_DRY_RUN: ${{ inputs.dry_run != 'none' && inputs.dry_run || '' }}
+          RENOVATE_REPORT_TYPE: file
+          RENOVATE_REPORT_PATH: /tmp/renovate-report.json
+
+      - name: Upload Renovate report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: renovate-report
+          path: /tmp/renovate-report.json
+          if-no-files-found: ignore
+          retention-days: 30
