@@ -5,6 +5,8 @@ name: Reusable GitHub Branch Protection Scan
 # This workflow builds complyctl from source and uses it to scan GitHub
 # branch protection rules via the ampel-branch-protection policy.
 # Policy bundles are fetched directly from Quay.io (public OCI artifacts).
+# The compliance verdict is based on the Gemara evaluation log (provider-
+# agnostic), not the scan exit code (which signals operational issues only).
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -118,51 +120,125 @@ jobs:
           ./bin/complyctl generate --policy-id "${POLICY_ID}"
 
       - name: Scan branch protection rules
+        id: scan
         env:
           GITHUB_TOKEN: "${{ secrets.source_token }}"
         run: |
+          set +e
           ./bin/complyctl scan --policy-id "${POLICY_ID}" --format pretty
+          scan_exit=$?
+          echo "exit_code=${scan_exit}" >> "$GITHUB_OUTPUT"
+          if [ "${scan_exit}" -ne 0 ]; then
+            echo "::warning::Scan reported operational issues (exit code ${scan_exit})"
+          fi
+          exit 0
+
+      - name: Install YAML parser
+        if: always()
+        run: pip install --quiet pyyaml
 
       - name: Publish report to GitHub Step Summary
+        if: always()
         run: |
-          for f in .complytime/ampel/results/*-ampel.intoto.json; do
-            [ -f "$f" ] || continue
-            label=$(basename "$f" -ampel.intoto.json)
+          python3 << 'PYEOF' >> "$GITHUB_STEP_SUMMARY"
+          import glob
+          import yaml
 
-            jq -r --arg label "$label" '
-              .predicate |
-              "## Branch Protection Scan: \($label)",
-              "",
-              ("**Overall Status:** " + (if .status == "PASS" then "✅ PASS" else "❌ FAIL" end)),
-              "",
-              "| Policy | Description | Status |",
-              "|--------|-------------|--------|",
-              (.results[] | "| \(.policy.id) | \(.meta.description) | \(if .status == "PASS" then "✅ PASS" else "❌ FAIL" end) |"),
-              "",
-              (.results[] |
-                "### \(.policy.id) — \(.meta.description)",
-                "",
-                (.eval_results[] |
-                  if .status == "PASS" then
-                    "- ✅ **Tenet \(.id):** \(.assessment.message)"
-                  else
-                    "- ❌ **Tenet \(.id):** \(.error.message)",
-                    (if (.error.guidance? // "") != "" then "  > **Guidance:** \(.error.guidance)" else empty end)
-                  end
-                ),
-                ""
-              )
-            ' "$f" >> "$GITHUB_STEP_SUMMARY"
-          done
+          STATUS = {"Passed": "✅", "Failed": "❌", "NotApplicable": "⚠️"}
+
+          logs = sorted(glob.glob(".complytime/scan/evaluation-log-*.yaml"))
+          if not logs:
+              print("*No Gemara evaluation logs found.*")
+              raise SystemExit(0)
+
+          for log_file in logs:
+              with open(log_file) as f:
+                  data = yaml.safe_load(f)
+
+              target = data.get("target", {}).get("name", "unknown")
+              result = data.get("result", "Unknown")
+              icon = STATUS.get(result, "❓")
+
+              print(f"## Compliance Scan: {target}")
+              print()
+              print(f"**Result:** {icon} {result}")
+              print()
+
+              evals = data.get("evaluations", [])
+              if not evals:
+                  print("No controls evaluated.")
+                  print()
+                  continue
+
+              counts = {}
+              for ev in evals:
+                  r = ev.get("result", "Unknown")
+                  counts[r] = counts.get(r, 0) + 1
+
+              parts = []
+              for label in ["Passed", "Failed", "NotApplicable"]:
+                  if counts.get(label, 0) > 0:
+                      parts.append(f"{counts[label]} {label.lower()}")
+              print(f"**Controls:** {', '.join(parts)}")
+              print()
+
+              failed = [e for e in evals if e.get("result") != "Passed"]
+              if failed:
+                  print("| Control | Status | Message |")
+                  print("|---------|--------|---------|")
+                  for ev in failed:
+                      name = ev.get("name", "")
+                      r = ev.get("result", "Unknown")
+                      msg = ev.get("message", "")
+                      print(f"| {name} | {STATUS.get(r, '❓')} {r} | {msg} |")
+                  print()
+
+              print("> Full details in the `gemara-evaluation-log` artifact.")
+              print()
+          PYEOF
+
+      - name: Evaluate compliance results
+        id: compliance
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import glob
+          import os
+          import yaml
+
+          output_file = os.environ.get("GITHUB_OUTPUT", "/dev/null")
+          logs = sorted(glob.glob(".complytime/scan/evaluation-log-*.yaml"))
+
+          if not logs:
+              print("No Gemara evaluation logs found")
+              with open(output_file, "a") as out:
+                  out.write("compliance_result=none\n")
+              raise SystemExit(0)
+
+          compliance_result = "pass"
+          for log_file in logs:
+              with open(log_file) as f:
+                  data = yaml.safe_load(f)
+              result = data.get("result", "Unknown")
+              target = data.get("target", {}).get("name", "unknown")
+              print(f"Gemara result for {target}: {result}")
+              if result == "Failed":
+                  compliance_result = "fail"
+
+          with open(output_file, "a") as out:
+              out.write(f"compliance_result={compliance_result}\n")
+          PYEOF
 
       - name: Upload scan results
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: report-policies-ampel-branch-protection.md
           path: report-*.md
           if-no-files-found: warn
 
-      - name: Upload Ample Results
+      - name: Upload Ampel Results
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ampel.intoto.json
@@ -170,8 +246,45 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload Snappy Results
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: snappy.intoto.json
           path: .complytime/ampel/results/*-snappy.intoto.json
           if-no-files-found: warn
+
+      - name: Upload Gemara Evaluation Log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gemara-evaluation-log
+          path: .complytime/scan/evaluation-log-*.yaml
+          if-no-files-found: warn
+
+      - name: Compliance scan verdict
+        if: always()
+        env:
+          COMPLIANCE_RESULT: ${{ steps.compliance.outputs.compliance_result }}
+          SCAN_EXIT_CODE: ${{ steps.scan.outputs.exit_code }}
+        run: |
+          if [ "${SCAN_EXIT_CODE:-0}" != "0" ]; then
+            echo "::warning::Scan reported operational issues (exit code ${SCAN_EXIT_CODE})"
+          fi
+          case "${COMPLIANCE_RESULT}" in
+            fail)
+              echo "::error::Compliance checks failed — review the Gemara evaluation log"
+              exit 1
+              ;;
+            none)
+              echo "::error::No compliance results found — scan may have failed"
+              exit 1
+              ;;
+            pass)
+              echo "Compliance checks passed"
+              exit 0
+              ;;
+            *)
+              echo "::warning::Unexpected compliance result: ${COMPLIANCE_RESULT}"
+              exit 1
+              ;;
+          esac

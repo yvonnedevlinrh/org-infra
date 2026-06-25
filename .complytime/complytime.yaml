@@ -1,9 +1,9 @@
 policies:
-  - url: quay.io/complytime/policies-ampel-branch-protection@latest
+  - url: quay.io/complytime/policies-ampel-branch-protection:latest
     id: ampel-bp
 
 complypacks:
-  - url: quay.io/complytime/complypack-ampel-branch-protection@latest
+  - url: quay.io/complytime/complypack-ampel-branch-protection:latest
     id: ampel-bp-pack
 
 targets:
