@@ -3,16 +3,20 @@
 # Dual-registry publish pipeline for the Ampel branch-protection complypack.
 #
 # Push to main / workflow_dispatch (default):
-#   1. publish-ghcr — packs and pushes the complypack OCI artifact to GHCR (sha-<commit> tag)
+#   1. publish-ghcr — packs and pushes the complypack OCI artifact to GHCR
+#                     (tag_override tag, or sha-<commit> when not specified)
 #   2. sign-ghcr    — signs the GHCR artifact with Sigstore keyless signing
 #
 # Release (published) / workflow_dispatch (promote_quay=true):
-#   3. verify-ghcr-source — verifies the GHCR artifact exists for the tagged commit
+#   3. verify-ghcr-source — verifies the GHCR artifact exists on GHCR
 #   4. promote-quay       — promotes the verified artifact from GHCR to Quay.io
 #
 # Manual Quay promotion:
-#   Use workflow_dispatch with promote_quay=true, release_tag, and source_sha
-#   to promote an existing GHCR artifact to Quay without cutting a new release.
+#   Use workflow_dispatch with promote_quay=true and release_tag to promote an
+#   existing GHCR artifact to Quay without cutting a new release.
+#   When the GHCR image was published with tag_override, pass the same
+#   tag_override value so the promotion finds the correct source image.
+#   Otherwise, source_sha (or HEAD) is used to construct the sha-<commit> tag.
 #   This is needed because release events from GITHUB_TOKEN-based workflows
 #   do not trigger downstream workflows (GitHub Actions limitation).
 
@@ -120,7 +124,7 @@ jobs:
       - name: Check GHCR artifact exists
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SOURCE_TAG: sha-${{ inputs.source_sha || github.sha }}
+          SOURCE_TAG: ${{ inputs.tag_override || format('sha-{0}', inputs.source_sha || github.sha) }}
           GH_ACTOR: ${{ github.actor }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
@@ -156,7 +160,7 @@ jobs:
     with:
       source_registry: ghcr.io
       source_image: complytime/complypack-ampel-branch-protection
-      source_tag: ${{ format('sha-{0}', inputs.source_sha || github.sha) }}
+      source_tag: ${{ inputs.tag_override || format('sha-{0}', inputs.source_sha || github.sha) }}
       dest_registry: quay.io
       dest_image: complytime/complypack-ampel-branch-protection
       dest_tag: ${{ github.event.release.tag_name || inputs.release_tag }}
