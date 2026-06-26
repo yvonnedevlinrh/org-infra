@@ -135,7 +135,7 @@ jobs:
 
       - name: Install YAML parser
         if: always()
-        run: pip install --quiet pyyaml
+        run: pip install --quiet pyyaml==6.0.2
 
       - name: Publish report to GitHub Step Summary
         if: always()
@@ -215,6 +215,7 @@ jobs:
                   out.write("compliance_result=none\n")
               raise SystemExit(0)
 
+          EXPECTED = {"Passed", "Failed", "NotApplicable"}
           compliance_result = "pass"
           for log_file in logs:
               with open(log_file) as f:
@@ -222,7 +223,10 @@ jobs:
               result = data.get("result", "Unknown")
               target = data.get("target", {}).get("name", "unknown")
               print(f"Gemara result for {target}: {result}")
-              if result == "Failed":
+              if result not in EXPECTED:
+                  print(f"::warning::Unexpected Gemara result '{result}' for {target}")
+                  compliance_result = "fail"
+              elif result == "Failed":
                   compliance_result = "fail"
 
           with open(output_file, "a") as out:
