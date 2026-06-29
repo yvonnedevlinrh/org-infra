@@ -1,9 +1,14 @@
 # Reusable Push Image Workflow
 # ============================
-# Builds and pushes container images with supply chain security artifacts.
+# Builds and optionally pushes container images with supply chain security artifacts.
 # Focused responsibility: build + push only.
 #
-# Security Layers (for unprotected refs):
+# Modes:
+# - push=true (default): Full pipeline — build, push, attestations
+# - push=false: Build-only — validates Dockerfile and action versions without
+#   requiring GHCR write access or org membership. Useful for dependabot PRs.
+#
+# Security Layers (for unprotected refs, push=true only):
 # - Layer 1: Workflow opt-in via allow_unprotected_ref input (default: false)
 # - Layer 2: Org membership verification via GitHub API
 # - Layer 3: Tag isolation (dev-sha-* and dev-* tags for unprotected refs)
@@ -15,6 +20,7 @@
 # Attestations (SLSA provenance + SBOM):
 # - generate_attestations='auto' (default): only for protected refs
 # - generate_attestations='true': always generate (even for unprotected refs)
+# - Skipped entirely when push=false
 #
 # Org Membership Check (unprotected refs only):
 # - Public orgs: GITHUB_TOKEN works (has public membership read access)
@@ -69,6 +75,11 @@ on:
         required: false
         default: "auto"
         type: string
+      push:
+        description: "Push image to GHCR. Set to false for build-only CI validation without registry access."
+        required: false
+        default: true
+        type: boolean
     secrets:
       org_check_token:
         description: "PAT with org:read scope for private org membership checks. Falls back to GITHUB_TOKEN if not provided."
@@ -120,7 +131,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify org membership
-        if: ${{ !github.ref_protected && inputs.allow_unprotected_ref }}
+        if: ${{ inputs.push && !github.ref_protected && inputs.allow_unprotected_ref }}
         env:
           GH_TOKEN: ${{ secrets.org_check_token != '' && secrets.org_check_token || secrets.GITHUB_TOKEN }}
           ORG_CHECK_TOKEN_PROVIDED: ${{ secrets.org_check_token != '' }}
@@ -197,6 +208,7 @@ jobs:
           echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
+        if: ${{ inputs.push }}
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
@@ -237,7 +249,7 @@ jobs:
         with:
           context: ${{ inputs.context_path }}
           file: ${{ inputs.containerfile_path }}
-          push: true
+          push: ${{ inputs.push }}
           platforms: ${{ inputs.platforms }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -250,13 +262,14 @@ jobs:
           no-cache: ${{ inputs.force_rebuild }}
 
       - name: Export digest
+        if: ${{ inputs.push }}
         id: digest
         env:
           BUILD_DIGEST: ${{ steps.build.outputs.digest }}
         run: echo "digest=${BUILD_DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Attest SLSA provenance
-        if: ${{ steps.attestation_policy.outputs.enabled == 'true' }}
+        if: ${{ inputs.push && steps.attestation_policy.outputs.enabled == 'true' }}
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ steps.images.outputs.image }}
@@ -264,7 +277,7 @@ jobs:
           push-to-registry: true
 
       - name: Generate SBOM
-        if: ${{ steps.attestation_policy.outputs.enabled == 'true' }}
+        if: ${{ inputs.push && steps.attestation_policy.outputs.enabled == 'true' }}
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: ${{ steps.images.outputs.image }}@${{ steps.build.outputs.digest }}
@@ -272,7 +285,7 @@ jobs:
           output-file: sbom.spdx.json
 
       - name: Attest SBOM
-        if: ${{ steps.attestation_policy.outputs.enabled == 'true' }}
+        if: ${{ inputs.push && steps.attestation_policy.outputs.enabled == 'true' }}
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ${{ steps.images.outputs.image }}
@@ -281,6 +294,7 @@ jobs:
           push-to-registry: true
 
       - name: Set output references
+        if: ${{ inputs.push }}
         id: output_refs
         env:
           IMAGE: ${{ steps.images.outputs.image }}

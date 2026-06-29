@@ -30,6 +30,26 @@ jobs:
             .github/workflows/ci_test_publish_ghcr.yml
             .github/ci-tests/ghcr-publish/**
 
+  test-build-only:
+    name: Test Build Only (No Push)
+    needs: check-changes
+    if: >-
+      needs.check-changes.outputs.ghcr_files_changed == 'true'
+    uses: ./.github/workflows/reusable_publish_ghcr.yml
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+      id-token: write
+      attestations: write
+    with:
+      component_name: org-infra-test
+      containerfile_path: .github/ci-tests/ghcr-publish/Containerfile
+      context_path: .github/ci-tests/ghcr-publish
+      image_name: complytime/org-infra-test
+      allow_unprotected_ref: true
+      push: false
+
   test-unprotected-org-member:
     name: Test Unprotected Ref (Org Member)
     needs: check-changes
