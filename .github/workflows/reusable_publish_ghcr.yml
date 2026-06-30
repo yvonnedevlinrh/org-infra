@@ -224,6 +224,7 @@ jobs:
             type=sha,format=long,prefix=${{ env.TAG_PREFIX }}sha-,priority=1000
             type=ref,event=branch,prefix=${{ env.TAG_PREFIX }}
             type=ref,event=pr,prefix=${{ env.TAG_PREFIX }}
+            type=ref,event=tag,prefix=${{ env.TAG_PREFIX }}
           flavor: |
             latest=false
           labels: |
