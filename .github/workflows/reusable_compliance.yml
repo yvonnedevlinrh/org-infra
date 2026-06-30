@@ -233,6 +233,22 @@ jobs:
               out.write(f"compliance_result={compliance_result}\n")
           PYEOF
 
+      - name: Sanitize artifact filenames
+        if: always()
+        run: |
+          # actions/upload-artifact rejects colons in filenames (NTFS
+          # limitation). complyctl embeds the OCI tag (e.g. ":latest")
+          # in report and evaluation-log filenames. Replace colons
+          # with dashes so artifacts upload successfully.
+          for f in report-*.md .complytime/scan/evaluation-log-*.yaml; do
+            [ -f "$f" ] || continue
+            sanitized="${f//:/-}"
+            if [ "$f" != "$sanitized" ]; then
+              mv "$f" "$sanitized"
+              echo "Renamed: $f -> $sanitized"
+            fi
+          done
+
       - name: Upload scan results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
