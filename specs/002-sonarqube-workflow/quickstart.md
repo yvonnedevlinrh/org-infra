@@ -148,6 +148,62 @@ jobs:
       source_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+**With source/test path scoping (Python example):**
+```yaml
+name: SonarQube Analysis
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: none
+  issues: none
+  pull-requests: none
+
+jobs:
+  generate-coverage:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run test
+        run: pytest --cov --cov-report=xml
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: coverage
+          path: coverage.xml
+
+  sonarqube:
+    name: SonarCloud Analysis
+    permissions:
+      contents: read
+      pull-requests: read
+    needs: generate-coverage
+    uses: complytime/org-infra/.github/workflows/reusable_sonarqube.yml@main
+    with:
+      sonar_organization: ${{ vars.SONAR_ORGANIZATION }}
+      sonar_project_key: ${{ vars.SONAR_PROJECT_KEY }}
+      coverage_artifact_name: coverage
+      coverage_file_path: coverage.xml
+      language_scanner_property: sonar.python.coverage.reportPaths
+      sonar_sources: complyscribe/
+      sonar_tests: tests/
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      source_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Without `sonar_sources` and `sonar_tests`, SonarCloud treats the entire repository as source
+code (including test files, scripts, and configs), which skews quality metrics. These inputs
+map directly to `sonar.sources` and `sonar.tests` scanner properties.
+
+Alternatively, repos can configure these properties via a `sonar-project.properties` file in
+the repository root. Workflow inputs take precedence (they are passed as `-D` CLI flags).
+
 **Language scanner properties:**
 - Go: `sonar.go.coverage.reportPaths`
 - Python: `sonar.python.coverage.reportPaths`
@@ -164,6 +220,11 @@ jobs:
 - `coverage_artifact_name`: Name of the coverage artifact uploaded by the previous job (default: `coverage`)
 - `coverage_file_path`: Path to coverage file within the artifact (e.g., `coverage.out`, `coverage.xml`)
 - `language_scanner_property`: SonarCloud scanner property for coverage (see language-specific properties above)
+
+### Optional Inputs (for source/test scoping)
+
+- `sonar_sources`: Comma-separated list of source directories (e.g., `complyscribe/`, `pkg/`). Maps to `sonar.sources`.
+- `sonar_tests`: Comma-separated list of test directories (e.g., `tests/`). Maps to `sonar.tests`.
 
 ### Required Secrets
 

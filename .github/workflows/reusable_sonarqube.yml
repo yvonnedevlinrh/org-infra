@@ -27,6 +27,16 @@ on:
         required: false
         type: string
         description: 'The Sonar Scanner property for coverage, e.g., sonar.typescript.lcov.reportPaths.'
+      sonar_sources:
+        required: false
+        type: string
+        default: ''
+        description: 'Comma-separated list of source directories (e.g., src/,lib/). Maps to sonar.sources.'
+      sonar_tests:
+        required: false
+        type: string
+        default: ''
+        description: 'Comma-separated list of test directories (e.g., tests/). Maps to sonar.tests.'
     secrets:
       SONAR_TOKEN:
         required: true
@@ -78,10 +88,14 @@ jobs:
           SONAR_PROJECT_KEY: ${{ inputs.sonar_project_key }}
           COVERAGE_FILE_PATH: ${{ inputs.coverage_file_path }}
           LANGUAGE_SCANNER_PROPERTY: ${{ inputs.language_scanner_property }}
+          SONAR_SOURCES: ${{ inputs.sonar_sources }}
+          SONAR_TESTS: ${{ inputs.sonar_tests }}
         with:
           projectBaseDir: ${{ github.workspace }} # Ensure scan starts at the repo root
           args: >
-            "-Dsonar.organization=${{ env.SONAR_ORGANIZATION }}"
-            "-Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}"
-            "-Dsonar.qualitygate.wait=true"
-            "${{ env.COVERAGE_FILE_PATH && format('-D{0}={1}', env.LANGUAGE_SCANNER_PROPERTY, env.COVERAGE_FILE_PATH) || '' }}"
+            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true
+            ${{ env.COVERAGE_FILE_PATH && format('-D{0}={1}', env.LANGUAGE_SCANNER_PROPERTY, env.COVERAGE_FILE_PATH) || '' }}
+            ${{ env.SONAR_SOURCES && format('-Dsonar.sources={0}', env.SONAR_SOURCES) || '' }}
+            ${{ env.SONAR_TESTS && format('-Dsonar.tests={0}', env.SONAR_TESTS) || '' }}

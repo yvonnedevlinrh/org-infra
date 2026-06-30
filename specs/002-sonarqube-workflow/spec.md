@@ -29,6 +29,12 @@ The workflow supports multiple language ecosystems with language-specific covera
 
 **Test Coverage:** Ensures language-specific scanner properties (Go and Python) can be configured, and the workflow correctly passes these to the SonarCloud scanner action.
 
+### Priority 2: Source and Test Path Scoping
+
+Callers can specify which directories SonarCloud treats as source code vs. test code via `sonar_sources` and `sonar_tests` inputs. Without these, SonarCloud scans the entire repository as source code, inflating code smell counts, duplication metrics, and skewing coverage percentages.
+
+**Test Coverage:** Validates that source and test path inputs are correctly passed as `-Dsonar.sources` and `-Dsonar.tests` scanner arguments, and that omitting them does not change default behavior.
+
 ## Edge Cases Addressed
 
 - **Missing coverage files**: Workflow proceeds with analysis when coverage files are not provided
@@ -43,7 +49,7 @@ The specification mandates that the sonarqube workflow must:
 2. **Enforce quality gates**: Configure SonarCloud scanner to wait for and enforce quality gate results
 3. **Handle coverage reports**: Optionally process test coverage files with language-specific scanner properties
 4. **Maintain security**: Follow least-privilege principles with minimal required permissions
-5. **Provide flexible configuration**: Accept inputs for organization, project key, coverage paths, and scanner properties
+5. **Provide flexible configuration**: Accept inputs for organization, project key, coverage paths, scanner properties, and source/test directory scoping
 6. **Use pinned actions**: Reference all GitHub actions by commit SHA for supply chain security
 
 ## Success Metrics
@@ -63,6 +69,7 @@ Adoption success requires:
 - Coverage file integration with language-specific scanner properties
 - Quality gate enforcement
 - Multi-language support via configurable scanner properties
+- Source and test directory scoping via `sonar_sources` and `sonar_tests` inputs
 
 **Excluded:**
 - SonarCloud project creation and configuration (handled in SonarCloud UI)
@@ -70,3 +77,4 @@ Adoption success requires:
 - Language-specific build steps (handled by consumer workflows or separate processes)
 - Organization-level SonarCloud administration
 - Custom quality gate definitions (managed in SonarCloud)
+- Language-version properties (e.g., `sonar.python.version`) -- repos can set these via `sonar-project.properties`
