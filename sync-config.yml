@@ -79,6 +79,7 @@ files_to_sync:
     exclude_repos:
       - .github
       - complyctl
+      - complypack
       - complytime
       - complytime-collector-components
       - complytime-providers
