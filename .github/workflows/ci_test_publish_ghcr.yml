@@ -9,6 +9,10 @@ on:
       - ".github/workflows/ci_test_publish_ghcr.yml"
       - ".github/ci-tests/ghcr-publish/Containerfile"
 
+concurrency:
+  group: test-publish-ghcr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -49,6 +53,41 @@ jobs:
       image_name: complytime/org-infra-test
       allow_unprotected_ref: true
       push: false
+
+  verify-build-only-behavior:
+    name: Verify Build Only (No Push)
+    needs: [test-build-only]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no digest produced
+        env:
+          DIGEST: ${{ needs.test-build-only.outputs.digest }}
+        run: |
+          if [[ -n "$DIGEST" ]]; then
+            echo "::error::digest should be empty when push=false, got: $DIGEST"
+            exit 1
+          fi
+          echo "::notice::Verified: digest is empty (no push occurred)"
+
+      - name: Verify no image_ref produced
+        env:
+          IMAGE_REF: ${{ needs.test-build-only.outputs.image_ref }}
+        run: |
+          if [[ -n "$IMAGE_REF" ]]; then
+            echo "::error::image_ref should be empty when push=false, got: $IMAGE_REF"
+            exit 1
+          fi
+          echo "::notice::Verified: image_ref is empty (no push occurred)"
+
+      - name: Verify no tags produced
+        env:
+          TAGS: ${{ needs.test-build-only.outputs.tags }}
+        run: |
+          if [[ -n "$TAGS" ]]; then
+            echo "::error::tags should be empty when push=false, got: $TAGS"
+            exit 1
+          fi
+          echo "::notice::Verified: tags are empty (no push occurred)"
 
   test-unprotected-org-member:
     name: Test Unprotected Ref (Org Member)
