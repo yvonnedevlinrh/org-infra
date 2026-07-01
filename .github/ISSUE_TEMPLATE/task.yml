@@ -25,7 +25,7 @@ body:
       label: Definition of Done
       description: Standard completion checklist.
       options:
-        - label: Initial usage documentation have been created
+        - label: Initial usage documentation has been created
         - label: The feature has been demonstrated successfully in the target environment
         - label: Proper testing has been completed (unit, integration, e2e, GitHub Actions)
         - label: Code has been reviewed for bugs and vulnerabilities
