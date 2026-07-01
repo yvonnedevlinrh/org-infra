@@ -1,0 +1,61 @@
+name: User Story
+description: A user story with acceptance criteria, out-of-scope boundaries, and a definition of done
+title: "[Story] "
+body:
+  - type: input
+    id: stakeholders
+    attributes:
+      label: "As (Stakeholders)"
+      description: Who are the stakeholders for this story?
+    validations:
+      required: true
+  - type: input
+    id: outcome
+    attributes:
+      label: "I want (Business Outcome)"
+      description: What is the desired business outcome?
+    validations:
+      required: true
+  - type: input
+    id: benefits
+    attributes:
+      label: "So that (Business Benefits)"
+      description: What are the expected business benefits?
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is the user benefit from this story?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: List the criteria that must be met for this story to be considered complete.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+      description: What is explicitly out of scope for this story?
+    validations:
+      required: false
+  - type: checkboxes
+    id: definition-of-done
+    attributes:
+      label: Definition of Done
+      description: Standard completion checklist.
+      options:
+        - label: Initial usage documentation have been created
+        - label: The feature has been demonstrated successfully in the target environment
+        - label: Proper testing has been completed (unit, integration, e2e, GitHub Actions)
+        - label: Code has been reviewed for bugs and vulnerabilities
+        - label: Technical debt has been documented if introduced
+        - label: Community buy-in/awareness has been obtained

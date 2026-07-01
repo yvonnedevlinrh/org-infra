@@ -113,11 +113,11 @@ files_to_sync:
   - source: .github/pull_request_template.md
     destination: .github/pull_request_template.md
 
-  - source: .github/ISSUE_TEMPLATE/bug_report.md
-    destination: .github/ISSUE_TEMPLATE/bug_report.md
+  - source: .github/ISSUE_TEMPLATE/bug_report.yml
+    destination: .github/ISSUE_TEMPLATE/bug_report.yml
 
-  - source: .github/ISSUE_TEMPLATE/feature_request.md
-    destination: .github/ISSUE_TEMPLATE/feature_request.md
+  - source: .github/ISSUE_TEMPLATE/feature_request.yml
+    destination: .github/ISSUE_TEMPLATE/feature_request.yml
 
 # Dependabot configuration
 # Common entries are applied to all repos (unless excluded).

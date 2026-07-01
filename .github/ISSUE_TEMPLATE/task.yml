@@ -1,0 +1,33 @@
+name: Task
+description: A tracked unit of work with sub-issues and a definition of done
+title: "[Task] "
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is this task and why does it matter?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: List the criteria that must be met for this task to be considered complete.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+  - type: checkboxes
+    id: definition-of-done
+    attributes:
+      label: Definition of Done
+      description: Standard completion checklist.
+      options:
+        - label: Initial usage documentation have been created
+        - label: The feature has been demonstrated successfully in the target environment
+        - label: Proper testing has been completed (unit, integration, e2e, GitHub Actions)
+        - label: Code has been reviewed for bugs and vulnerabilities
+        - label: Technical debt has been documented if introduced
+        - label: Community buy-in/awareness has been obtained
