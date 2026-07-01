@@ -2,7 +2,10 @@
 name: Reusable CI
 
 # --------------------------------------------------------------------------
-# This workflow only runs when explicitly called by another workflow.
+# Reusable CI workflow: runs MegaLinter and PR title validation.
+# If linter config files are missing locally, fetches org defaults
+# from org-infra as a fallback. See sync-config.yml for the canonical
+# list of org-managed configs.
 # --------------------------------------------------------------------------
 on:
   workflow_call:
@@ -22,11 +25,68 @@ jobs:
       contents: read
       issues: read
       pull-requests: read
+    # Org-managed linter configs — single source of truth for fallback.
+    # Keep in sync with sync-config.yml when adding new config files.
+    env:
+      LINTER_CONFIGS: >-
+        .mega-linter.yml .golangci.yml .yamllint.yml
+        commitlint.config.js ruff.toml
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+
+      - name: Check local linter configs
+        id: check_configs
+        run: |
+          missing=""
+          for file in $LINTER_CONFIGS; do
+            if [ ! -f "$file" ]; then
+              missing="$missing $file"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "needs_fallback=true" >> "$GITHUB_OUTPUT"
+            echo "missing_files=$missing" >> "$GITHUB_OUTPUT"
+            echo "Missing configs:$missing — will fetch from org-infra"
+          else
+            echo "needs_fallback=false" >> "$GITHUB_OUTPUT"
+            echo "All linter configs present locally"
+          fi
+
+      - name: Checkout org-infra fallback configs
+        if: steps.check_configs.outputs.needs_fallback == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .org-infra-fallback
+          sparse-checkout: |
+            .mega-linter.yml
+            .golangci.yml
+            .yamllint.yml
+            commitlint.config.js
+            ruff.toml
+          persist-credentials: false
+
+      - name: Copy missing configs from org-infra
+        if: steps.check_configs.outputs.needs_fallback == 'true'
+        env:
+          MISSING_FILES: ${{ steps.check_configs.outputs.missing_files }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          fallback_dir=".org-infra-fallback"
+          echo "org-infra fallback ref: $WORKFLOW_SHA"
+          for file in $MISSING_FILES; do
+            if [ -f "$fallback_dir/$file" ]; then
+              cp "$fallback_dir/$file" "$file"
+              echo "Copied fallback: $file"
+            else
+              echo "::warning::Fallback config not found in org-infra: $file"
+            fi
+          done
+          rm -rf "$fallback_dir"
 
       - name: Install Dependencies
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
