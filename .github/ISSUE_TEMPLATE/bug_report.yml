@@ -2,6 +2,20 @@ name: Bug report
 description: Create a report to help us improve
 labels: [bug]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report!
+        Please search existing issues before submitting to avoid duplicates.
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I have searched for existing issues
+          required: true
+        - label: This is not a security vulnerability (report via the repository's SECURITY.md)
+          required: true
   - type: textarea
     id: description
     attributes:
@@ -33,6 +47,17 @@ body:
     attributes:
       label: Screenshots
       description: If applicable, add screenshots to help explain your problem.
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Relevant version and platform information.
+      placeholder: |
+        Affected workflow/config file:
+        Runner OS (if applicable):
+        GitHub Actions runner version (if applicable):
     validations:
       required: false
   - type: textarea
