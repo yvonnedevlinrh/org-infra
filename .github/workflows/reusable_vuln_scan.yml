@@ -24,6 +24,10 @@ on:
         description: 'Severity levels to report'
         type: string
         default: 'HIGH,CRITICAL'
+      trivy_ignorefile:
+        description: 'Path to .trivyignore or .trivyignore.yaml for scoped exclusions'
+        type: string
+        default: ''
 
 permissions:
   contents: none
@@ -71,6 +75,7 @@ jobs:
           scan-type: 'fs'
           scanners: 'secret,misconfig'
           severity: ${{ inputs.trivy_severity }}
+          trivyignores: ${{ inputs.trivy_ignorefile }}
           ignore-unfixed: true
           format: 'sarif'
           output: 'trivy-source-scan-${{ github.workflow_sha }}-${{ github.run_number }}.sarif'

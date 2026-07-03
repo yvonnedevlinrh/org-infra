@@ -45,6 +45,10 @@ files_to_sync:
           complytime: "true"
           complytime-providers: "true"
           complytime-collector-components: "true"
+      trivy_ignorefile:
+        default: "''"
+        repos:
+          complytime-providers: "'.trivyignore.yaml'"
 
   - source: .github/workflows/ci_crapload.yml
     destination: .github/workflows/ci_crapload.yml
