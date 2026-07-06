@@ -67,6 +67,72 @@ jobs:
           RENOVATE_REPORT_TYPE: file
           RENOVATE_REPORT_PATH: /tmp/renovate-report.json
 
+      - name: Generate job summary
+        if: always() && hashFiles('/tmp/renovate-report.json') != ''
+        shell: bash
+        run: |
+          REPORT="/tmp/renovate-report.json"
+          DRY_RUN="${{ inputs.dry_run }}"
+
+          {
+            echo "## Renovate Run Summary"
+            echo ""
+            if [ -n "$DRY_RUN" ] && [ "$DRY_RUN" != "none" ]; then
+              echo "> **Mode:** dry-run (\`${DRY_RUN}\`) — no changes were made"
+              echo ""
+            fi
+
+            # --- Repository overview table ---
+            echo "### Repositories"
+            echo ""
+            echo "| Repository | Go Version | Deps | PRs | Status |"
+            echo "|:-----------|:-----------|-----:|----:|:-------|"
+
+            jq -r '
+              .repositories | to_entries[] |
+              (.value.packageFiles.gomod // []) as $gomod |
+              ([($gomod[]?.deps // [])[] | select(.depName == "go" and .depType == "golang") | .currentValue] | unique | join(", ")) as $versions |
+              ([($gomod[]?.deps // []) | length] | add // 0) as $deps |
+              (.value.branches | length) as $prs |
+              (if $prs > 0 then "\u26a0\ufe0f Updates"
+               elif ($gomod | length) == 0 then "Skipped (no go.mod)"
+               else "\u2705 Up to date"
+               end) as $status |
+              "| \(.key) | \(if $versions == "" then "-" else $versions end) | \($deps) | \($prs) | \($status) |"
+            ' "$REPORT"
+
+            # --- PRs created/updated ---
+            PR_COUNT=$(jq '[.repositories[].branches[]] | length' "$REPORT")
+            if [ "$PR_COUNT" -gt 0 ]; then
+              echo ""
+              echo "### Pull Requests"
+              echo ""
+              echo "| Repository | Branch | Update | From | To |"
+              echo "|:-----------|:-------|:-------|:-----|:---|"
+
+              jq -r '
+                .repositories | to_entries[] |
+                .key as $repo |
+                .value.branches[]? |
+                .branchName as $branch |
+                (.upgrades // [])[] |
+                "| \($repo) | \($branch) | \(.depName // .packageName // "-") | \(.currentVersion // .currentValue // "-") | \(.newVersion // .newValue // "-") |"
+              ' "$REPORT"
+            fi
+
+            # --- Problems ---
+            PROBLEM_COUNT=$(jq '[.problems[], .repositories[].problems[]] | length' "$REPORT")
+            if [ "$PROBLEM_COUNT" -gt 0 ]; then
+              echo ""
+              echo "### Warnings"
+              echo ""
+              jq -r '
+                [.repositories | to_entries[] | .key as $repo | .value.problems[] | "\($repo): \(.msg)"] |
+                unique[] | "- \(.)"
+              ' "$REPORT"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Renovate report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
