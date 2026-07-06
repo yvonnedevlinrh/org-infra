@@ -27,8 +27,10 @@ Specifically, this repository includes:
 org-infra/
 ├── .github/
 │  ├── ISSUE_TEMPLATE/
-│  │  ├── bug_report.md                     # Issue template to report a Bug.
-│  │  └── feature_request.md                # Issue template to request a Feature.
+│  │  ├── bug_report.yml                    # Issue form to report a Bug.
+│  │  ├── feature_request.yml               # Issue form to request a Feature.
+│  │  ├── task.yml                          # Issue form for tracked work items.
+│  │  └── user_story.yml                    # Issue form for user stories.
 │  ├── workflows/
 │  │  ├── ci_checks.yml                     # Workflow to consume `reusable_ci`.
 │  │  ├── ci_compliance.yml                 # Workflow to consume `reusable_compliance`.
