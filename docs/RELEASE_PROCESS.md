@@ -103,13 +103,14 @@ After downloading release artifacts, verify the cosign signature over the checks
 
 ```bash
 cosign verify-blob \
-  --bundle checksums.txt.sigstore.json \
+  --signature checksums.txt.sig \
+  --certificate checksums.txt.pem \
   checksums.txt \
   --certificate-identity-regexp="https://github.com/<org>/" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
 ```
 
-Replace `<org>` with the GitHub organization (e.g., `complytime` or `unbound-force`). A successful verification confirms the checksums file was produced by a GitHub Actions workflow in the expected organization.
+Replace `<org>` with the GitHub organization (e.g., `complytime` or `unbound-force`). The `--signature` and `--certificate` flags match the separate `.sig`/`.pem` files produced by the GoReleaser `signs:` configuration (see [GoReleaser Configuration Standards](RELEASE_WORKFLOWS.md#goreleaser-configuration-standards)). A successful verification confirms the checksums file was produced by a GitHub Actions workflow in the expected organization.
 
 ### Verifying Checksums
 

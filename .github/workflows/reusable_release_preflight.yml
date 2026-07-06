@@ -47,11 +47,6 @@ on:
         required: false
         type: string
         default: ''
-      default_branch:
-        description: 'Default branch name for CI context'
-        required: false
-        type: string
-        default: 'main'
     outputs:
       tag:
         description: 'Validated tag string'
@@ -89,22 +84,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Validate default_branch input
-        id: validate_branch
-        env:
-          DEFAULT_BRANCH: ${{ inputs.default_branch }}
-        run: |
-          if [[ "$DEFAULT_BRANCH" =~ ^- ]]; then
-            echo "::error::default_branch must not start with a hyphen: $DEFAULT_BRANCH"
-            exit 1
-          fi
-          if [[ ! "$DEFAULT_BRANCH" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
-            echo "::error::default_branch contains invalid characters: $DEFAULT_BRANCH"
-            echo "::error::Allowed: [a-zA-Z0-9/_-]"
-            exit 1
-          fi
-          echo "::notice::default_branch validated: $DEFAULT_BRANCH"
 
       - name: Validate tag format
         id: validate_tag
@@ -199,63 +178,18 @@ jobs:
             exit 1
           fi
 
-          # Check if either version has a pre-release suffix
-          if [[ "$LATEST_VER" != *"-"* && "$NEW_VER" != *"-"* ]]; then
-            # Both are release versions — use sort -V for simple comparison
-            SORTED=$(printf '%s\n%s\n' "$LATEST_VER" "$NEW_VER" | sort -V | tail -1)
-            if [[ "$SORTED" == "$LATEST_VER" ]]; then
-              echo "::error::New tag $RELEASE_TAG is not greater than $LATEST_TAG"
-              exit 1
-            fi
-            echo "::notice::Semver ordering verified: $LATEST_TAG < $RELEASE_TAG"
-          else
-            # One or both have pre-release — use Python semver 2.0.0 comparison
-            # Pass versions as CLI args to avoid shell interpolation in Python source
-            python3 -c "
-          import sys
-
-          def parse_semver(v):
-              if '-' in v:
-                  core, pre = v.split('-', 1)
-              else:
-                  core, pre = v, None
-              major, minor, patch = (int(x) for x in core.split('.'))
-              if pre is None:
-                  return (major, minor, patch, None)
-              ids = []
-              for ident in pre.split('.'):
-                  ids.append(int(ident) if ident.isdigit() else ident)
-              return (major, minor, patch, ids)
-
-          def cmp_semver(a, b):
-              for i in range(3):
-                  if a[i] != b[i]:
-                      return -1 if a[i] < b[i] else 1
-              if a[3] is None and b[3] is None:
-                  return 0
-              if a[3] is None:
-                  return 1
-              if b[3] is None:
-                  return -1
-              for x, y in zip(a[3], b[3]):
-                  if type(x) is type(y):
-                      if x != y:
-                          return -1 if x < y else 1
-                  else:
-                      return -1 if isinstance(x, int) else 1
-              if len(a[3]) != len(b[3]):
-                  return -1 if len(a[3]) < len(b[3]) else 1
-              return 0
-
-          latest = parse_semver(sys.argv[1])
-          new = parse_semver(sys.argv[2])
-          sys.exit(0 if cmp_semver(latest, new) < 0 else 1)
-          " "$LATEST_VER" "$NEW_VER" || {
-              echo "::error::New tag $RELEASE_TAG is not greater than $LATEST_TAG"
-              exit 1
-            }
-            echo "::notice::Semver ordering verified: $LATEST_TAG < $RELEASE_TAG"
-          fi
+          # Compare versions using semver library (section 11 compliant)
+          # semver==3.0.4
+          pip install -q "semver==3.0.4" \
+            --require-hashes --no-deps \
+            --hash=sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746 \
+            >/dev/null 2>&1
+          python3 -c "import semver, sys; sys.exit(0 if semver.compare(sys.argv[1], sys.argv[2]) < 0 else 1)" \
+            "$LATEST_VER" "$NEW_VER" || {
+            echo "::error::New tag $RELEASE_TAG is not greater than $LATEST_TAG"
+            exit 1
+          }
+          echo "::notice::Semver ordering verified: $LATEST_TAG < $RELEASE_TAG"
 
       - name: Discover CI checks
         id: discover_checks

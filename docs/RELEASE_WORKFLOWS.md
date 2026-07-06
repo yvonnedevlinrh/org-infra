@@ -158,9 +158,10 @@ jobs:
     if: needs.preflight.outputs.tag != ''
     uses: complytime/org-infra/.github/workflows/reusable_publish_ghcr.yml@main
     with:
-      # Adjust image_name to match your repo
-      image_name: ${{ github.repository }}
-      tag: ${{ needs.preflight.outputs.tag }}
+      component_name: my-service        # adjust to your component
+      containerfile_path: Containerfile  # path to your Containerfile
+      context_path: .                    # build context
+      image_name: complytime/my-service  # org/image without registry prefix
     permissions:
       contents: read
       packages: write
@@ -173,7 +174,6 @@ jobs:
     uses: complytime/org-infra/.github/workflows/reusable_trivy_image_scan.yml@main
     with:
       image_ref: ${{ needs.publish-ghcr.outputs.image_ref }}
-      image_digest: ${{ needs.publish-ghcr.outputs.image_digest }}
     permissions:
       contents: read
       packages: write
@@ -183,15 +183,16 @@ jobs:
     needs: [publish-ghcr, scan]
     uses: complytime/org-infra/.github/workflows/reusable_sign_and_verify.yml@main
     with:
-      image_ref: ${{ needs.publish-ghcr.outputs.image_ref }}
-      image_digest: ${{ needs.publish-ghcr.outputs.image_digest }}
+      image_name: ${{ needs.publish-ghcr.outputs.image }}
+      digest: ${{ needs.publish-ghcr.outputs.digest }}
+      allowed_identity_regex: 'https://github.com/complytime/.*'
     permissions:
       contents: read
       packages: write
       id-token: write
 ```
 
-**Note:** Adjust `image_name`, `image_ref`, and `image_digest` output references to match the actual outputs of `reusable_publish_ghcr.yml` in your pipeline. Add `reusable_publish_quay.yml` as a final job if your repo promotes to Quay.
+**Note:** Adjust `component_name`, `image_name`, `containerfile_path`, and `allowed_identity_regex` to match your repository. Add `reusable_publish_quay.yml` as a final job if your repo promotes to Quay.
 
 ### Library (oscal-sdk-go pattern)
 
@@ -295,8 +296,10 @@ jobs:
     if: needs.preflight.outputs.tag != ''
     uses: complytime/org-infra/.github/workflows/reusable_publish_ghcr.yml@main
     with:
-      image_name: ${{ github.repository }}
-      tag: ${{ needs.preflight.outputs.tag }}
+      component_name: my-service
+      containerfile_path: Containerfile
+      context_path: .
+      image_name: complytime/my-service
     permissions:
       contents: read
       packages: write
@@ -309,7 +312,6 @@ jobs:
     uses: complytime/org-infra/.github/workflows/reusable_trivy_image_scan.yml@main
     with:
       image_ref: ${{ needs.publish-ghcr.outputs.image_ref }}
-      image_digest: ${{ needs.publish-ghcr.outputs.image_digest }}
     permissions:
       contents: read
       packages: write
@@ -319,8 +321,9 @@ jobs:
     needs: [publish-ghcr, scan]
     uses: complytime/org-infra/.github/workflows/reusable_sign_and_verify.yml@main
     with:
-      image_ref: ${{ needs.publish-ghcr.outputs.image_ref }}
-      image_digest: ${{ needs.publish-ghcr.outputs.image_digest }}
+      image_name: ${{ needs.publish-ghcr.outputs.image }}
+      digest: ${{ needs.publish-ghcr.outputs.digest }}
+      allowed_identity_regex: 'https://github.com/complytime/.*'
     permissions:
       contents: read
       packages: write
@@ -453,7 +456,7 @@ signs:
 | `tag` | `string` | yes | — | Semver tag to release (e.g., `v1.2.3`) |
 | `allow_prerelease` | `boolean` | no | `false` | Accept pre-release suffixes (e.g., `v1.0.0-beta.0`) |
 | `ci_checks` | `string` | no | `''` (empty) | JSON array of CI check names to verify. Empty = auto-discover from workflow files |
-| `default_branch` | `string` | no | `'main'` | Default branch name for CI context |
+
 
 **Outputs:**
 
