@@ -47,6 +47,7 @@
 .uf/replicator/*.db-wal
 .uf/replicator/*.lock
 .uf/replicator/*.log
+.uf/feedback/
 .uf/muti-mind/artifacts/
 .uf/mx-f/data/
 # Legacy tool directories (renamed to .uf/ in Spec 025)
