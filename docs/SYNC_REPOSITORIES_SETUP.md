@@ -97,8 +97,8 @@ This approach follows GitHub's security best practices and only requires read ac
 1. Go to `https://github.com/complytime/org-infra/settings/secrets/actions`
 2. Add two new repository secrets:
 
-   **Secret 1: `SYNC_APP_ID`**
-   - Value: Your GitHub App ID (e.g., `123456`)
+   **Secret 1: `SYNC_APP_CLIENT_ID`**
+   - Value: Your GitHub App Client ID (e.g., `123456`)
 
    **Secret 2: `SYNC_APP_PRIVATE_KEY`**
    - Value: Contents of the `.pem` file you downloaded
@@ -196,7 +196,7 @@ Once testing is successful, the workflow will run automatically:
 **Error:** `Failed to get authenticated user`
 
 **Solution:**
-- Verify `SYNC_APP_ID` and `SYNC_APP_PRIVATE_KEY` are correctly set
+- Verify `SYNC_APP_CLIENT_ID` and `SYNC_APP_PRIVATE_KEY` are correctly set
 - Check that the app is installed on your organization
 - Ensure the private key format is correct (including header/footer)
 
