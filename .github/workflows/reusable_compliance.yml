@@ -193,7 +193,7 @@ jobs:
                       print(f"| {name} | {STATUS.get(r, '❓')} {r} | {msg} |")
                   print()
 
-              print("> Full details in the `gemara-evaluation-log` artifact.")
+              print("> Full details in the `gemara-evaluation-logs` artifact.")
               print()
           PYEOF
 
@@ -253,7 +253,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: report-policies-ampel-branch-protection.md
+          name: compliance-scan-reports
           path: report-*.md
           if-no-files-found: warn
 
@@ -261,7 +261,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ampel.intoto.json
+          name: ampel-intoto-attestations
           path: .complytime/ampel/results/*-ampel.intoto.json
           if-no-files-found: warn
 
@@ -269,7 +269,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: snappy.intoto.json
+          name: snappy-intoto-attestations
           path: .complytime/ampel/results/*-snappy.intoto.json
           if-no-files-found: warn
 
@@ -277,7 +277,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: gemara-evaluation-log
+          name: gemara-evaluation-logs
           path: .complytime/scan/evaluation-log-*.yaml
           if-no-files-found: warn
 
