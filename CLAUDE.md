@@ -35,7 +35,7 @@ Python: Follow `ruff.toml` configuration
 - 001-crapload-workflow: Added YAML (GitHub Actions workflow syntax) + Gaze, Go toolchain, `jq`, `bc`
 - 004-standardize-ai-tooling: Added OpenCode agent, OpenSpec/SpecKit, `gh` CLI, AI tooling docs
 - 006-robust-dependabot-approval: Added dependabot approval workflow with dependency review
-- go-toolchain-patch-automation: Added `ci_renovate.yml` (centralized self-hosted Renovate runner for Go toolchain patch updates). Uses `renovatebot/github-action@v46.1.16` with a dedicated GitHub App (`complytime-renovate[bot]`, `contents:write` + `pull-requests:write`). Shared preset (`go-toolchain-patches.json`) restricts to gomod toolchain patches only. Global config (`renovate-config.js`) targets 4 Go repos via `globalExtends`.
+- go-toolchain-patch-automation: Added `ci_renovate.yml` (centralized self-hosted Renovate runner for Go version patch updates). Uses `renovatebot/github-action@v46.1.16` with a dedicated GitHub App (`complytime-renovate[bot]`, `contents:write` + `pull-requests:write`). Shared preset (`go-toolchain-patches.json`) restricts to Go version patch updates only (matches `go` and `toolchain` directives via `matchDepNames`). Global config (`renovate-config.js`) autodiscovers org repos via `globalExtends`.
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

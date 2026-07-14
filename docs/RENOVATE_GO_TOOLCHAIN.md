@@ -1,8 +1,9 @@
 # Go Toolchain Patch Automation
 
-Automated Go toolchain patch updates via Renovate, running as a
-centralized workflow in org-infra. Creates PRs to bump the `toolchain`
-directive in `go.mod` when newer patch versions are available.
+Automated Go version patch updates via Renovate, running as a
+centralized workflow in org-infra. Creates PRs to bump Go version
+directives (`go` and `toolchain`) in `go.mod` when newer patch
+versions are available.
 
 ## Overview
 
@@ -26,7 +27,7 @@ directive in `go.mod` when newer patch versions are available.
 │  complyctl  complytime  complytime-  complytime-collector-  │
 │                         providers    components             │
 │                                                             │
-│  Result: PR per repo with toolchain patch bump              │
+│  Result: PR per repo with Go version patch bump              │
 │  Example: chore(deps): update dependency go to v1.25.11     │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -34,7 +35,7 @@ directive in `go.mod` when newer patch versions are available.
 Dependabot manages Go module dependencies but does not support the
 `toolchain` directive
 ([dependabot-core#13520](https://github.com/dependabot/dependabot-core/issues/13520)).
-Renovate fills this gap, scoped to `gomod` toolchain patches only.
+Renovate fills this gap, scoped to Go version patch updates only.
 
 ## Configuration
 
@@ -43,7 +44,7 @@ Renovate fills this gap, scoped to `gomod` toolchain patches only.
 | File | Purpose |
 |------|---------|
 | `ci_renovate.yml` | Workflow: daily schedule + manual dispatch with dry-run |
-| `go-toolchain-patches.json` | Preset: three-rule pattern restricting to toolchain patches |
+| `go-toolchain-patches.json` | Preset: three-rule pattern restricting to Go version patches |
 | `renovate-config.js` | Global config: target repos, `globalExtends`, `onboarding: false` |
 
 ### Preset rules (`go-toolchain-patches.json`)
@@ -52,9 +53,9 @@ The preset uses three package rules to achieve patch-only filtering:
 
 1. **Disable all gomod deps** -- prevents Renovate from touching
    module dependencies (Dependabot's responsibility)
-2. **Re-enable toolchain** -- with `separateMinorPatch: true` so
-   Renovate generates separate entries for patch vs minor updates
-3. **Suppress minor/major** -- disables non-patch toolchain updates
+2. **Re-enable Go version deps** -- with `separateMinorPatch: true`
+   so Renovate generates separate entries for patch vs minor updates
+3. **Suppress minor/major** -- disables non-patch Go version updates
    after version lookup
 
 This three-rule pattern is required because `matchUpdateTypes`
@@ -107,7 +108,7 @@ RENOVATE_DEPENDENCY_DASHBOARD=false \
 RENOVATE_POST_UPDATE_OPTIONS='["gomodTidy","gomodVendor"]' \
 RENOVATE_REPORT_TYPE=file \
 RENOVATE_REPORT_PATH=/tmp/renovate-report.json \
-RENOVATE_PACKAGE_RULES='[{"matchManagers":["gomod"],"enabled":false},{"matchManagers":["gomod"],"matchDepTypes":["toolchain"],"enabled":true,"separateMinorPatch":true,"automerge":false,"labels":["dependencies"]},{"matchManagers":["gomod"],"matchDepTypes":["toolchain"],"matchUpdateTypes":["minor","major"],"enabled":false}]' \
+RENOVATE_PACKAGE_RULES='[{"matchManagers":["gomod"],"enabled":false},{"matchManagers":["gomod"],"matchDepNames":["go"],"enabled":true,"separateMinorPatch":true,"automerge":false,"labels":["dependencies"]},{"matchManagers":["gomod"],"matchDepNames":["go"],"matchUpdateTypes":["minor","major"],"enabled":false}]' \
 npx --yes --package renovate renovate \
   --platform=github \
   --token="$RENOVATE_TOKEN" \
@@ -141,7 +142,7 @@ Check whether the repo is already on the latest patch:
 
 ```bash
 gh api repos/complytime/<repo>/contents/go.mod --jq '.content' \
-  | base64 -d | grep -E "^toolchain "
+  | base64 -d | grep -E "^(go |toolchain )"
 curl -s 'https://go.dev/dl/?mode=json' \
   | python3 -c "import json,sys; [print(r['version']) for r in json.load(sys.stdin) if r['version'].startswith('go1.25')]"
 ```
@@ -175,7 +176,7 @@ were taken.
 ### Merge conflicts with Dependabot PRs
 
 Renovate runs `go mod tidy` and `go mod vendor` after bumping the
-toolchain version (`postUpdateOptions` in the preset). This
+Go version (`postUpdateOptions` in the preset). This
 regenerates `go.sum` and vendor contents. If a Dependabot PR
 modifying the same `go.sum` is open concurrently, the second PR to
 merge will encounter a merge conflict.
@@ -184,13 +185,13 @@ Resolution options:
 
 - **Rebase the conflicting PR** manually or via the GitHub UI
   "Update branch" button.
-- **Merge the smaller PR first** -- Renovate toolchain patches are
+- **Merge the smaller PR first** -- Renovate Go version patches are
   typically one-line `go.mod` changes and resolve cleanly after
   rebase.
 
 This is a timing issue, not a functional conflict. Dependabot manages
-module dependencies; Renovate manages the toolchain directive. They
-do not overlap in scope.
+module dependencies; Renovate manages Go version directives. They do
+not overlap in scope.
 
 ## Further reading
 

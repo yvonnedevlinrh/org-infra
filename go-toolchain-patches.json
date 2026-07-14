@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Go toolchain patch updates only — shared preset for complytime org",
+  "description": "Go version patch updates only — shared preset for complytime org",
   "dependencyDashboard": false,
   "enabledManagers": ["gomod"],
   "packageRules": [
@@ -12,7 +12,7 @@
     {
       "description": "Re-enable Go version directives for patch updates",
       "matchManagers": ["gomod"],
-      "matchDepTypes": ["golang", "toolchain"],
+      "matchDepNames": ["go"],
       "enabled": true,
       "separateMinorPatch": true,
       "automerge": false,
@@ -22,7 +22,7 @@
     {
       "description": "Suppress non-patch Go version updates (minor/major)",
       "matchManagers": ["gomod"],
-      "matchDepTypes": ["golang", "toolchain"],
+      "matchDepNames": ["go"],
       "matchUpdateTypes": ["minor", "major"],
       "enabled": false
     }
