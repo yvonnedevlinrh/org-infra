@@ -47,7 +47,7 @@ if [[ "$INPUT_PKGS" = "./..." ]]; then
 		MODULE_COUNT=$(echo "$DISCOVERED" | grep -c .)
 		echo "Found $MODULE_COUNT module(s)" >&2
 
-		DISCOVERED=$(echo "$DISCOVERED" | paste -sd ' ')
+		DISCOVERED=$(echo "$DISCOVERED" | tr '\n' ' ' | sed 's/ $//')
 		echo "$DISCOVERED"
 		echo "Auto-discovered packages: $DISCOVERED" >&2
 		echo "::notice::Analyzing all discovered modules. To analyze specific modules, set the 'packages' workflow input." >&2

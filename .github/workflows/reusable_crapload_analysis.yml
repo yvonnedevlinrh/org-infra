@@ -104,7 +104,7 @@ jobs:
             echo "No Go files changed in this PR."
             exit 0
           fi
-          PACKAGES=$(echo "$CHANGED_FILES" | xargs -I{} dirname {} | grep -v '/vendor/' | grep -v '^vendor' | sort -u | sed 's|^|./|' | paste -sd ' ')
+          PACKAGES=$(echo "$CHANGED_FILES" | xargs -I{} dirname {} | grep -v '/vendor/' | grep -v '^vendor' | sort -u | sed 's|^|./|' | tr '\n' ' ' | sed 's/ $//')
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
           echo "Changed packages: $PACKAGES"
