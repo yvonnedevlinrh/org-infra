@@ -41,4 +41,4 @@ jobs:
       contents: read
       security-events: write  # Needed to upload the results to code-scanning dashboard.
       id-token: write         # Needed to access GitHub's OIDC token which verifies the authenticity of the result when publishing it.
-    uses: complytime/org-infra/.github/workflows/reusable_security.yml@638b2037394ca0f0b860a135c7c27dce75fd3c03 # v0.5.0
+    uses: complytime/org-infra/.github/workflows/reusable_security.yml@aff4817ed6f0364e7f899bfb63ec6db42e69fde2 # v0.6.0
